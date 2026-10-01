@@ -7,8 +7,8 @@ import {replaceChildren, createElement} from "@opendaw/lib-jsx"
 import {initializeColors} from "@opendaw/studio-enums"
 import {TestbedShell} from "./shell"
 import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport, TransportEpoch} from "./transport"
-import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track"
-import {computeWaveformPeaks} from "./waveform"
+import {AudioTrackPlayer, decodeAudioFile} from "./audio-track"
+import {buildWaveformPyramidAsync, extractVisibleWaveformPeaks, WaveformPyramid} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
 import {RackStore} from "./rack-store"
@@ -35,6 +35,8 @@ const transport = new Transport(() => audioContext.currentTime)
 const trackStore = new TrackStore()
 const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
+const waveformPyramids = new Map<string, WaveformPyramid>()
+const waveformBuilds = new Map<string, Promise<WaveformPyramid>>()
 const kahuRuntimes = new Map<string, KahuGainRuntime>()
 const runtimeErrors = new Map<string, string>()
 let catalogModules: ReadonlyArray<KahuModuleManifest> = []
@@ -61,6 +63,7 @@ let meterReadout: HTMLElement | undefined
 let bypassAllButton: HTMLButtonElement | undefined
 let bypassAll = false
 let animationFrame = 0
+let waveformZoom = 1
 
 const saveSession = (): void => {
     try {
@@ -149,14 +152,25 @@ const seekFromInput = (value: string): void => {
     restartTransportRefresh()
 }
 
-const drawWaveform = (track: DecodedAudioFile): void => {
+const drawWaveform = (track: TrackState): void => {
     const canvas = waveformCanvas
     const context = canvas?.getContext("2d")
-    if (canvas === undefined || context === null || context === undefined) {
+    const pyramid = waveformPyramids.get(track.id)
+    if (canvas === undefined || context === null || context === undefined || pyramid === undefined) {
         return
     }
-    const peaks = computeWaveformPeaks(track.buffer.getChannelData(0), canvas.width)
-    const height = canvas.height
+    const logicalWidth = Math.max(1, canvas.parentElement?.clientWidth ?? canvas.clientWidth ?? 1200)
+    const logicalHeight = Math.max(1, canvas.parentElement?.clientHeight ?? canvas.clientHeight ?? 160)
+    const devicePixelRatio = Math.min(3, Math.max(1, window.devicePixelRatio || 1))
+    const physicalWidth = Math.max(1, Math.floor(logicalWidth * devicePixelRatio))
+    const physicalHeight = Math.max(1, Math.floor(logicalHeight * devicePixelRatio))
+    if (canvas.width !== physicalWidth || canvas.height !== physicalHeight) {
+        canvas.width = physicalWidth
+        canvas.height = physicalHeight
+    }
+    const visibleSamples = Math.max(1, pyramid.sampleCount / waveformZoom)
+    const peaks = extractVisibleWaveformPeaks(pyramid, 0, visibleSamples, physicalWidth)
+    const height = physicalHeight
     const midpoint = height / 2
     context.clearRect(0, 0, canvas.width, height)
     context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-green")
@@ -165,6 +179,23 @@ const drawWaveform = (track: DecodedAudioFile): void => {
         const bottom = midpoint - peaks.minimum[column] * midpoint * 0.85
         context.fillRect(column, top, 1, Math.max(1, bottom - top))
     }
+}
+
+const ensureWaveformPyramid = (track: TrackState): void => {
+    if (waveformPyramids.has(track.id) || waveformBuilds.has(track.id)) {
+        drawWaveform(track)
+        return
+    }
+    const build = buildWaveformPyramidAsync(track.audio.buffer.getChannelData(0))
+    waveformBuilds.set(track.id, build)
+    void build.then(pyramid => {
+        waveformBuilds.delete(track.id)
+        waveformPyramids.set(track.id, pyramid)
+        if (trackStore.selected()?.id === track.id) drawWaveform(track)
+    }).catch(() => {
+        waveformBuilds.delete(track.id)
+        if (trackStore.selected()?.id === track.id) audioStatus?.replaceChildren("Waveform peak generation failed")
+    })
 }
 
 const applyTrackGain = (track: TrackState): void => {
@@ -204,7 +235,7 @@ const updateSelectedTrack = (): void => {
     }
     audioStatus?.replaceChildren("Audio ready — press Play")
     waveformCanvas?.classList.remove("hidden")
-    drawWaveform(track.audio)
+    ensureWaveformPyramid(track)
 }
 
 const removeTrack = (id: string): void => {
@@ -737,10 +768,9 @@ replaceChildren(document.body, (
                     <label className="zoom-control">ZOOM
                         <input type="range" min="1" max="4" step="0.25" value="1" aria-label="Timeline zoom"
                                onInit={element => element.oninput = () => {
-                                   const canvas = waveformCanvas
-                                   if (canvas !== undefined) {
-                                       canvas.style.width = `${Number(element.value) * 100}%`
-                                   }
+                                   waveformZoom = Number(element.value)
+                                   const track = trackStore.selected()
+                                   if (track !== undefined) drawWaveform(track)
                                }}/>
                     </label>
                     <span className="timeline-note">Audio track · Web Audio runtime</span>
