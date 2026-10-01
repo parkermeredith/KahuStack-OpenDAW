@@ -52,6 +52,13 @@ KOD-5 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
 add/remove/reorder/bypass contracts and horizontal device framing. It is explicitly a
 reference/no-op lifecycle slot, not a fake Kahu processor. Focused tests, lint, and build pass.
 
+KOD-6 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`6c521662d`. The testbed now stages the generated parent catalog/WASM, emits a standalone
+typed AudioWorklet, resolves stable `utility.gain` metadata, prepares the Rust-derived module,
+and routes a track through the worklet with gain/bypass controls and failure surfacing. The
+direct ABI smoke and app tests/build pass; owner browser listening and runtime-handshake proof
+remain pending.
+
 ---
 
 ## 1. Product goal
