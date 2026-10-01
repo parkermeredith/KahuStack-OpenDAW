@@ -47,6 +47,11 @@ waveform focus, create/remove through the shared loader, mute, solo, per-track g
 shared transport playback. Focused tests, lint, and production build pass; owner validation
 still needs multiple-file playback and audible mute/solo/gain checks.
 
+KOD-5 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`f1e925da4`. The selected-track rack now retains per-track audio-effect slot chains with
+add/remove/reorder/bypass contracts and horizontal device framing. It is explicitly a
+reference/no-op lifecycle slot, not a fake Kahu processor. Focused tests, lint, and build pass.
+
 ---
 
 ## 1. Product goal
