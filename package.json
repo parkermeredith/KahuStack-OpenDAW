@@ -11,7 +11,7 @@
     "clean": "bash ./scripts/clean.sh",
     "build": "turbo build --output-logs=full",
     "build-wasm": "npm run build:wasm -w @opendaw/studio-core-wasm",
-    "dev:studio": "turbo run dev --filter=@opendaw/app-studio",
+    "dev:studio": "turbo run dev --filter=@opendaw/app-studio --filter=@opendaw/manual",
     "dev:lab": "turbo run dev --filter=@opendaw/lab",
     "dev:manual": "turbo run dev --filter=@opendaw/manual",
     "dev:yjs-server": "turbo run dev --filter=yjs-server",
