@@ -11,6 +11,7 @@ import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track
 import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {RackStore} from "./rack-store"
+import {KahuGainRuntime} from "./kahu-runtime"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
@@ -20,12 +21,15 @@ const transport = new Transport(() => audioContext.currentTime)
 const trackStore = new TrackStore()
 const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
+const kahuRuntimes = new Map<string, KahuGainRuntime>()
+const runtimeErrors = new Map<string, string>()
 let timeReadout: HTMLElement | undefined
 let musicalReadout: HTMLElement | undefined
 let playhead: HTMLElement | undefined
 let seekInput: HTMLInputElement | undefined
 let positionInput: HTMLInputElement | undefined
 let playButton: HTMLButtonElement | undefined
+let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
 let audioStatus: HTMLElement | undefined
 let audioMetadata: HTMLElement | undefined
@@ -125,6 +129,9 @@ const updateSelectedTrack = (): void => {
 const removeTrack = (id: string): void => {
     audioPlayers.get(id)?.stop()
     audioPlayers.delete(id)
+    kahuRuntimes.get(id)?.dispose()
+    kahuRuntimes.delete(id)
+    runtimeErrors.delete(id)
     trackStore.remove(id)
     rackStore.removeTrack(id)
     refreshTrackList()
@@ -249,17 +256,20 @@ const refreshRack = (): void => {
         return
     }
     for (const [index, device] of devices.entries()) {
+        const runtime = kahuRuntimes.get(track.id)
         const card = document.createElement("article")
         card.className = `rack-device${device.bypassed ? " bypassed" : ""}`
         const cardHeader = document.createElement("div")
         cardHeader.className = "rack-device-header"
         const name = document.createElement("strong")
-        name.textContent = device.name
+        name.textContent = runtime === undefined ? device.name : "Kahu Gain · utility.gain"
         const status = document.createElement("small")
-        status.textContent = device.bypassed ? "BYPASSED" : "REFERENCE SLOT"
+        status.textContent = device.bypassed ? "BYPASSED" : runtime === undefined ? "RUNTIME PENDING" : "RUST/WASM ACTIVE"
         cardHeader.append(name, status)
         const body = document.createElement("p")
-        body.textContent = "No Kahu processor attached"
+        body.textContent = runtime === undefined
+            ? runtimeErrors.get(track.id) ?? "Waiting for the staged Kahu runtime"
+            : `utility.gain · ${runtime.latency} sample latency`
         const controls = document.createElement("div")
         controls.className = "rack-device-controls"
         const bypass = document.createElement("button")
@@ -268,6 +278,7 @@ const refreshRack = (): void => {
         bypass.textContent = "BYP"
         bypass.onclick = () => {
             rackStore.setBypassed(track.id, device.id, !device.bypassed)
+            kahuRuntimes.get(track.id)?.setBypassed(!device.bypassed)
             refreshRack()
         }
         const moveLeft = document.createElement("button")
@@ -297,8 +308,42 @@ const refreshRack = (): void => {
             refreshRack()
         }
         controls.append(bypass, moveLeft, moveRight, remove)
-        card.append(cardHeader, body, controls)
+        if (runtime !== undefined) {
+            const gain = document.createElement("input")
+            gain.className = "rack-gain"
+            gain.type = "range"
+            gain.min = "-60"
+            gain.max = "24"
+            gain.step = "0.1"
+            gain.value = runtime.gain.toString()
+            gain.title = "Kahu Gain dB"
+            gain.setAttribute("aria-label", "Kahu Gain dB")
+            gain.oninput = () => runtime.setGainDb(Number(gain.value))
+            card.append(cardHeader, body, gain, controls)
+        } else {
+            card.append(cardHeader, body, controls)
+        }
         root.append(card)
+    }
+}
+
+const initializeRuntime = async (trackId: string): Promise<void> => {
+    const player = audioPlayers.get(trackId)
+    if (player === undefined) {
+        return
+    }
+    engineStatus?.replaceChildren("RUST/WASM ENGINE · LOADING")
+    try {
+        const runtime = await KahuGainRuntime.create(audioContext, 2, 128)
+        kahuRuntimes.set(trackId, runtime)
+        player.setOutput(runtime.output)
+        runtimeErrors.delete(trackId)
+        engineStatus?.replaceChildren("RUST/WASM ENGINE · READY")
+        refreshRack()
+    } catch (error) {
+        runtimeErrors.set(trackId, error instanceof Error ? error.message : "Kahu runtime initialization failed.")
+        engineStatus?.replaceChildren("RUST/WASM ENGINE · UNAVAILABLE")
+        refreshRack()
     }
 }
 
@@ -340,9 +385,11 @@ const loadAudio = async (file: File): Promise<void> => {
         const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
         player.load(track.buffer)
         audioPlayers.set(state.id, player)
+        rackStore.addReferenceSlot(state.id)
         refreshTrackList()
         updateSelectedTrack()
         refreshTrackDuration()
+        void initializeRuntime(state.id)
         if (wasPlaying) {
             playAllPlayers()
         }
@@ -378,7 +425,7 @@ replaceChildren(document.body, (
             <div className="header-divider" aria-hidden="true"/>
             <span className="phase-label">{TestbedShell.phase}</span>
             <div className="header-spacer"/>
-            <span className="engine-status">{TestbedShell.engineStatus}</span>
+            <span className="engine-status" onInit={element => engineStatus = element}>{TestbedShell.engineStatus}</span>
             <button className="header-button" type="button" disabled aria-label="Settings are not connected yet">
                 SETUP
             </button>

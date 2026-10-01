@@ -26,9 +26,13 @@ export class AudioTrackPlayer {
     private offsetSeconds = 0
     private readonly gainNode: GainNode
 
-    constructor(private readonly context: AudioContext, private readonly onEnded?: () => void) {
+    constructor(
+        private readonly context: AudioContext,
+        private readonly onEnded?: () => void,
+        output: AudioNode = context.destination
+    ) {
         this.gainNode = context.createGain()
-        this.gainNode.connect(context.destination)
+        this.gainNode.connect(output)
     }
 
     load(buffer: AudioBuffer): void {
@@ -106,6 +110,11 @@ export class AudioTrackPlayer {
 
     setGain(gain: number): void {
         this.gainNode.gain.setValueAtTime(Math.min(1, Math.max(0, gain)), this.context.currentTime)
+    }
+
+    setOutput(output: AudioNode): void {
+        this.gainNode.disconnect()
+        this.gainNode.connect(output)
     }
 
     private stopSource(): void {

@@ -5,7 +5,9 @@
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "scripts": {
+    "predev": "node ../../../scripts/stage-kahu-runtime.mjs && node ../../../scripts/build-kahu-worklet.mjs",
     "dev": "vite --clearScreen false",
+    "prebuild": "node ../../../scripts/stage-kahu-runtime.mjs && node ../../../scripts/build-kahu-worklet.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview --host",
     "lint": "eslint \"src/**/*.ts\" \"src/**/*.tsx\"",
