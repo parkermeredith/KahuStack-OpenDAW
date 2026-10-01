@@ -1,6 +1,6 @@
 # KahuStack DSP Testbed — Implementation Plan
 
-Status: **active implementation design**
+Status: **KOD prototype history plus active KBW v2 implementation register**
 
 Date: 2026-10-01
 
@@ -14,7 +14,45 @@ This document defines the implementation program for turning the KahuStack openD
 
 It is subordinate to the KahuStack DSP repository authorities for DSP semantics, module IDs, parameter/state behavior, Rust/WASM lineage, realtime rules, and validation policy. This repository owns the experimental DAW shell and its openDAW-derived integration code; it must not silently redefine KahuStack DSP behavior.
 
-## Current implementation status
+## Active program: KBW — Kahu Browser Workbench v2
+
+KBW hardens the KOD prototype into a compact KahuStack browser engineering host. It is not a
+general-purpose DAW and must continue to use KahuStack's canonical Rust DSP, generated manifest,
+registry, parameter semantics, runtime lifecycle, and Rust-WASM lineage.
+
+Current status: **KBW-0 SOURCE COMPLETE / KBW-1 SOURCE COMPLETE / KBW-2 ACTIVE**.
+
+KBW-0 baseline was rerun at parent `e6de30edbd1a2f3d116ee4bcc4472c0af2690743` and child
+`edda8be2af9674906b7e99a514159d3289df4e31`. KBW-1 is implemented at child `0708cdbba`:
+the child stages the parent-owned manifest types and executable validator, parses the staged
+catalog through that validator, and permanently tests malformed module, parameter, enum, registry,
+control, scale, transition, and duplicate-ID cases.
+
+KBW phase register:
+
+| Phase | Status | Scope |
+| --- | --- | --- |
+| KBW-0 | SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING | Baseline and regression inventory. |
+| KBW-1 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Canonical manifest contract consumption. |
+| KBW-2 | ACTIVE | Generic metadata-driven processor editor. |
+| KBW-3 | NOT STARTED | Shared sample-clock transport epoch. |
+| KBW-4 | NOT STARTED | Minimal region timing. |
+| KBW-5 | NOT STARTED | Worker multiresolution waveform pyramid. |
+| KBW-6 | NOT STARTED | Minimal timeline architecture boundaries. |
+| KBW-7 | NOT STARTED | Per-device reference runtime instrumentation. |
+| KBW-8 | NOT STARTED | 1/2/4/8/16 processor scaling benchmark. |
+| KBW-9 | NOT STARTED | Consolidated Rust rack runtime. |
+| KBW-10 | NOT STARTED | Evidence-based runtime choice. |
+| KBW-11 | NOT STARTED | DSP comparison and analysis controls. |
+| KBW-12 | NOT STARTED | Session model hardening and migration. |
+| KBW-13 | NOT STARTED | Browser/native semantic convergence. |
+| KBW-14 | NOT STARTED | Prototype-debt and documentation closure. |
+
+Long-form streaming audio is explicitly deferred. KBW targets normal songs, stems, and reference
+tracks from seconds through tens of minutes; it does not authorize five-hour recording, streaming
+PCM, OPFS/range readers, tiled long-form stores, disk-streaming playback, or long-form caches.
+
+## KOD prototype implementation status
 
 KOD-0 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING**. The synchronized fork
 baseline was `e6540064c0253e44910346d7faaf3d74e36c28c2`; the KOD-0 bootstrap commit is
@@ -69,14 +107,15 @@ KOD-9 is **SOURCE COMPLETE / OWNER RECOVERY VALIDATION PENDING** at the same che
 Versioned local session metadata records track technical identity and rack/device state; source
 audio remains an explicit browser-local reselect requirement.
 
-KOD-10 is **SOURCE COMPLETE / OWNER LONG-FORM PERFORMANCE EVIDENCE PENDING**. The host keeps
-waveform reduction, storage, playback, and rack/runtime seams separable, and `npm run perf:kahu`
-reports generated artifact sizes. It does not claim multi-hour source readiness because decoding
-still uses a resident `AudioBuffer`.
+KOD-10 is **SOURCE COMPLETE / LONG-FORM DEFERRED**. The host keeps waveform reduction, storage,
+playback, and rack/runtime seams separable, and `npm run perf:kahu` reports generated artifact
+sizes. Multi-hour source readiness is intentionally not a KBW requirement; the current path decodes
+each selected source into a resident `AudioBuffer`.
 
 KOD-11 is **SOURCE COMPLETE / OWNER FINAL BROWSER VALIDATION PENDING**. The fork now documents
 run/build/test/runtime-check/staging/provenance behavior and exposes permanent focused commands;
-the remaining closure is owner-run browser, audible, recovery, and long-form qualification.
+browser, audible, recovery, and device qualification remain owner-run. Long-form qualification is
+not pending because long-form streaming is explicitly deferred.
 
 ---
 
