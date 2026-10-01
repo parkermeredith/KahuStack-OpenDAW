@@ -12,6 +12,7 @@ import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {RackStore} from "./rack-store"
 import {KahuGainRuntime, KahuModuleManifest} from "./kahu-runtime"
+import {createSession, decodeSession, encodeSession, SESSION_STORAGE_KEY} from "./session-store"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
@@ -50,6 +51,38 @@ let meterReadout: HTMLElement | undefined
 let bypassAllButton: HTMLButtonElement | undefined
 let bypassAll = false
 let animationFrame = 0
+
+const saveSession = (): void => {
+    try {
+        localStorage.setItem(SESSION_STORAGE_KEY, encodeSession(createSession(trackStore.all(), rackStore)))
+        engineStatus?.replaceChildren("SESSION SAVED · SOURCE FILES LOCAL")
+    } catch {
+        engineStatus?.replaceChildren("SESSION SAVE FAILED")
+    }
+}
+
+const recoverSession = (): void => {
+    try {
+        const serialized = localStorage.getItem(SESSION_STORAGE_KEY)
+        if (serialized === null) {
+            engineStatus?.replaceChildren("NO SAVED SESSION")
+            return
+        }
+        const session = decodeSession(serialized)
+        rackStore.restore(session.rack)
+        refreshRack()
+        for (const track of trackStore.all()) {
+            for (const device of rackStore.devicesFor(track.id)) {
+                if (device.moduleId !== undefined) {
+                    void initializeRuntime(track.id, device.id, device.moduleId)
+                }
+            }
+        }
+        engineStatus?.replaceChildren("SESSION RECOVERED · RESELECT SOURCE AUDIO")
+    } catch {
+        engineStatus?.replaceChildren("SESSION RECOVERY FAILED")
+    }
+}
 
 const refreshTransport = (): void => {
     const snapshot = transport.snapshot()
@@ -522,6 +555,8 @@ replaceChildren(document.body, (
             <span className="phase-label">{TestbedShell.phase}</span>
             <div className="header-spacer"/>
             <span className="engine-status" onInit={element => engineStatus = element}>{TestbedShell.engineStatus}</span>
+            <button className="header-button" type="button" onInit={element => element.onclick = saveSession}>SAVE</button>
+            <button className="header-button" type="button" onInit={element => element.onclick = recoverSession}>RECOVER</button>
             <button className="header-button" type="button" disabled aria-label="Settings are not connected yet">
                 SETUP
             </button>

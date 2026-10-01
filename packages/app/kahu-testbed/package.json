@@ -9,9 +9,11 @@
     "dev": "vite --clearScreen false",
     "prebuild": "node ../../../scripts/stage-kahu-runtime.mjs && node ../../../scripts/build-kahu-worklet.mjs",
     "build": "tsc && vite build",
+    "check:runtime": "node ../../../scripts/check-kahu-runtime.mjs",
     "preview": "vite preview --host",
     "lint": "eslint \"src/**/*.ts\" \"src/**/*.tsx\"",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@opendaw/lib-jsx": "^0.0.93",
