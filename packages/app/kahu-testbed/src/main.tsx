@@ -1,4 +1,4 @@
-// KOD-3 entrypoint: composes the isolated shell and browser audio boundary without owning DSP behavior.
+// KBW-2 entrypoint: composes the isolated shell and metadata-driven browser host without owning DSP behavior.
 
 import "./main.sass"
 // The classic TypeScript JSX transform consumes createElement in generated output.
@@ -11,7 +11,14 @@ import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track
 import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {RackStore} from "./rack-store"
-import {KahuGainRuntime, KahuModuleManifest} from "./kahu-runtime"
+import {KahuGainRuntime, KahuModuleManifest, KahuParameterManifest} from "./kahu-runtime"
+import {
+    controlStep,
+    controlValueToParameterValue,
+    editorKind,
+    formatParameterValue,
+    parameterValueToControlValue,
+} from "./parameter-editor"
 import {createSession, decodeSession, encodeSession, SESSION_STORAGE_KEY} from "./session-store"
 
 initializeColors(document.documentElement)
@@ -298,6 +305,87 @@ const rebuildTrackRack = (trackId: string): void => {
     player.setOutput(runtimes[0]?.output ?? monitorInput)
 }
 
+const parameterEditor = (
+    track: TrackState,
+    deviceId: string,
+    deviceModuleId: string | undefined,
+    deviceValues: Record<string, number>,
+    runtime: KahuGainRuntime | undefined,
+    parameter: KahuParameterManifest,
+): HTMLElement => {
+    const row = document.createElement("label")
+    row.className = "rack-parameter"
+    row.dataset.automation = parameter.automation
+    row.dataset.transition = parameter.transition
+
+    const heading = document.createElement("span")
+    heading.className = "rack-parameter-heading"
+    const name = document.createElement("strong")
+    name.textContent = parameter.name
+    const readout = document.createElement("small")
+    const initialValue = runtime?.parameterValue(parameter.key) ?? deviceValues[parameter.key] ?? parameter.default
+    readout.textContent = formatParameterValue(parameter, initialValue)
+    heading.append(name, readout)
+
+    const kind = editorKind(parameter)
+    const updateValue = (controlValue: number): void => {
+        const value = controlValueToParameterValue(parameter, controlValue)
+        readout.textContent = formatParameterValue(parameter, value)
+        rackStore.setParameter(track.id, deviceId, parameter.key, value)
+        if (runtime === undefined) return
+        if (parameter.automation === "reprepare") {
+            engineStatus?.replaceChildren("RUST/WASM ENGINE · REPREPARE")
+            void initializeRuntime(track.id, deviceId, deviceModuleId ?? runtime.moduleId)
+        } else {
+            runtime.setParameter(parameter.key, value)
+        }
+    }
+
+    if (kind === "boolean") {
+        const control = document.createElement("input")
+        control.className = "rack-parameter-toggle"
+        control.type = "checkbox"
+        control.checked = initialValue >= 0.5
+        control.disabled = runtime === undefined
+        control.setAttribute("aria-label", `${parameter.name} ${parameter.automation}`)
+        control.onchange = () => updateValue(control.checked ? 1 : 0)
+        row.append(heading, control)
+        return row
+    }
+
+    if (kind === "enum") {
+        const control = document.createElement("select")
+        control.className = "rack-parameter-select"
+        control.disabled = runtime === undefined
+        control.setAttribute("aria-label", `${parameter.name} ${parameter.automation}`)
+        for (const [index, label] of (parameter.enum_values ?? []).entries()) {
+            const option = document.createElement("option")
+            option.value = index.toString()
+            option.textContent = label
+            control.append(option)
+        }
+        control.value = Math.round((initialValue - parameter.min) / parameter.step).toString()
+        control.onchange = () => updateValue(Number(control.value))
+        row.append(heading, control)
+        return row
+    }
+
+    const control = document.createElement("input")
+    control.className = "rack-parameter-range"
+    control.type = "range"
+    control.min = kind === "logarithmic" ? "0" : parameter.min.toString()
+    control.max = kind === "logarithmic" ? "1" : parameter.max.toString()
+    control.step = controlStep(parameter)
+    control.value = parameterValueToControlValue(parameter, initialValue).toString()
+    control.disabled = runtime === undefined
+    control.title = `${parameter.key} · ${parameter.automation} · ${parameter.transition}`
+    control.setAttribute("aria-label", `${parameter.name} ${parameter.automation}`)
+    const event = parameter.automation === "reprepare" ? "change" : "input"
+    control.addEventListener(event, () => updateValue(Number(control.value)))
+    row.append(heading, control)
+    return row
+}
+
 const refreshRack = (): void => {
     const root = rackList
     if (root === undefined) {
@@ -400,30 +488,14 @@ const refreshRack = (): void => {
             controls.append(reset)
         }
         controls.append(bypass, moveLeft, moveRight, remove)
-        if (runtime !== undefined) {
-            const parameter = runtime.parameters[0]
-            if (parameter !== undefined) {
-                const parameterControl = document.createElement("input")
-                parameterControl.className = "rack-gain"
-                parameterControl.type = "range"
-                parameterControl.min = parameter.min.toString()
-                parameterControl.max = parameter.max.toString()
-                parameterControl.step = parameter.step.toString()
-                parameterControl.value = runtime.parameterValue(parameter.key).toString()
-                parameterControl.title = parameter.key
-                parameterControl.setAttribute("aria-label", `${runtime.name} ${parameter.key}`)
-                parameterControl.oninput = () => {
-                    const value = Number(parameterControl.value)
-                    runtime.setParameter(parameter.key, value)
-                    rackStore.setParameter(track.id, device.id, parameter.key, value)
-                }
-                card.append(cardHeader, body, parameterControl, controls)
-            } else {
-                card.append(cardHeader, body, controls)
-            }
-        } else {
-            card.append(cardHeader, body, controls)
+        const module = catalogModules.find(candidate => candidate.id === device.moduleId)
+        const parameters = runtime?.parameters ?? module?.parameters ?? []
+        const parameterRows = document.createElement("div")
+        parameterRows.className = "rack-parameter-list"
+        for (const parameter of parameters) {
+            parameterRows.append(parameterEditor(track, device.id, device.moduleId, device.parameterValues, runtime, parameter))
         }
+        card.append(cardHeader, body, parameterRows, controls)
         root.append(card)
     }
 }

@@ -539,8 +539,58 @@ button:disabled
     color: var(--color-gray)
     font-size: 0.65rem
 
-.rack-gain
+.rack-parameter-list
+  display: flex
+  flex-direction: column
+  gap: 0.35rem
+  max-height: 5.1rem
+  overflow-y: auto
+
+.rack-parameter
+  display: flex
+  flex-direction: column
+  gap: 0.15rem
+  color: var(--color-gray)
+  font-size: 0.56rem
+
+  &[data-automation="reprepare"]
+    border-left: 1px solid var(--color-orange)
+    padding-left: 0.25rem
+
+.rack-parameter-heading
+  display: flex
+  justify-content: space-between
+  gap: 0.3rem
+
+  strong
+    overflow: hidden
+    color: var(--color-gray)
+    font-size: 0.56rem
+    font-weight: 400
+    text-overflow: ellipsis
+    white-space: nowrap
+
+  small
+    flex: 0 0 auto
+    color: var(--color-bright)
+    font-size: 0.53rem
+
+.rack-parameter-range
   width: 100%
+  accent-color: var(--color-green)
+
+.rack-parameter-select
+  width: 100%
+  padding: 0.15rem 0.2rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.15rem
+  font: inherit
+  font-size: 0.55rem
+
+.rack-parameter-toggle
+  align-self: flex-start
   accent-color: var(--color-green)
 
 .rack-device-header
