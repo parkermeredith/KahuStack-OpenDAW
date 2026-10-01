@@ -7,11 +7,14 @@
   "scripts": {
     "predev": "node ../../../scripts/stage-kahu-runtime.mjs && node ../../../scripts/build-kahu-worklet.mjs",
     "dev": "vite --clearScreen false",
+    "pretypecheck": "node ../../../scripts/stage-kahu-runtime.mjs",
     "prebuild": "node ../../../scripts/stage-kahu-runtime.mjs && node ../../../scripts/build-kahu-worklet.mjs",
     "build": "tsc && vite build",
+    "precheck:runtime": "node ../../../scripts/stage-kahu-runtime.mjs",
     "check:runtime": "node ../../../scripts/check-kahu-runtime.mjs",
     "preview": "vite preview --host",
     "lint": "eslint \"src/**/*.ts\" \"src/**/*.tsx\"",
+    "pretest": "node ../../../scripts/stage-kahu-runtime.mjs",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },

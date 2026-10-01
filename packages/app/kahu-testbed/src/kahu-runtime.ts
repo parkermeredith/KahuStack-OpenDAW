@@ -1,13 +1,16 @@
-// KOD-7 host bridge: resolves generated Kahu metadata and retains Rust-WASM AudioWorklet devices.
+// KBW-1 host bridge: consumes the parent-owned generated manifest contract and retains Rust-WASM
+// AudioWorklet devices. Metadata parsing is delegated to the copied canonical validator.
 
-export type KahuParameterManifest = Readonly<{id: number, key: string, default: number, min: number, max: number, step: number}>
-export type KahuModuleManifest = Readonly<{
-    id: string
-    name: string
-    runtime: Readonly<{registry_index: number, latency_samples: number}>
-    parameters: ReadonlyArray<KahuParameterManifest>
-}>
-export type KahuLibraryManifest = Readonly<{modules: ReadonlyArray<KahuModuleManifest>}>
+import {parseLibraryManifest} from "./generated/kahu-manifest-runtime.js"
+import type {
+    DspModuleManifest,
+    DspParameterManifest,
+    LibraryManifest,
+} from "./generated/kahu-manifest-types.js"
+
+export type KahuParameterManifest = DspParameterManifest
+export type KahuModuleManifest = DspModuleManifest
+export type KahuLibraryManifest = LibraryManifest
 
 const WASM_URL = "/kahu-runtime/kahu_dsp_wasm.wasm"
 const MANIFEST_URL = "/kahu-runtime/library-manifest.json"
@@ -24,11 +27,11 @@ const loadAssets = (): Promise<Readonly<{wasmBytes: ArrayBuffer, manifest: KahuL
         if (!wasmResponse.ok || !manifestResponse.ok) {
             throw new Error("Kahu Rust-WASM runtime assets are unavailable; run the parent build staging step.")
         }
-        const [wasmBytes, manifest] = await Promise.all([
+        const [wasmBytes, rawManifest] = await Promise.all([
             wasmResponse.arrayBuffer(),
-            manifestResponse.json() as Promise<KahuLibraryManifest>
+            manifestResponse.json()
         ])
-        return {wasmBytes, manifest}
+        return {wasmBytes, manifest: parseLibraryManifest(rawManifest)}
     })
     return assets
 }
@@ -44,7 +47,7 @@ export class KahuGainRuntime {
     private constructor(node: AudioWorkletNode, module: KahuModuleManifest) {
         this.node = node
         this.module = module
-        this.latencySamples = module.runtime.latency_samples
+        this.latencySamples = module.runtime.latency_samples ?? 0
         for (const parameter of module.parameters) {
             this.parameterIds.set(parameter.key, parameter.id)
             this.parameterValues.set(parameter.id, parameter.default)

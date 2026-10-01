@@ -10,6 +10,7 @@ dist-ssr
 /packages/app/kahu-testbed/public/kahu-runtime/*.wasm
 /packages/app/kahu-testbed/public/kahu-runtime/library-manifest.json
 /packages/app/kahu-testbed/public/worklets/*.js
+/packages/app/kahu-testbed/src/generated/*.ts
 server/dist
 public/dist
 public/build-info.json
