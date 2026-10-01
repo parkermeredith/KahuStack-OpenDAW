@@ -35,6 +35,9 @@ button
 button:disabled
   cursor: default
 
+.hidden
+  display: none !important
+
 .testbed-shell
   display: flex
   flex-direction: column
@@ -224,6 +227,20 @@ button:disabled
   border-radius: 0.2rem
   font-size: 0.65rem
 
+.zoom-control
+  display: flex
+  align-items: center
+  gap: 0.35rem
+  margin-right: 0.75rem
+  color: var(--color-gray)
+  font-size: 0.6rem
+
+  input
+    width: 4rem
+
+.zoom-control input, .seek-slider
+  accent-color: var(--color-green)
+
 .transport-button:hover, .stop-button:hover
   color: var(--color-bright)
   border-color: var(--color-green)
@@ -265,6 +282,70 @@ button:disabled
 
 .lane-track
   padding: 0.65rem
+
+.audio-drop-zone
+  position: relative
+  display: flex
+  align-items: center
+  gap: 0.75rem
+  min-height: 7rem
+  padding: 0.65rem 0.8rem
+  overflow: hidden
+  background: var(--color-panel-background-bright)
+  border: 1px dashed rgba(white, 0.14)
+  border-left: 2px solid var(--color-green)
+
+  &.dragging
+    border-color: var(--color-orange)
+    background: color-mix(in srgb, var(--color-orange), transparent 88%)
+
+.audio-drop-copy
+  display: flex
+  flex-direction: column
+  gap: 0.3rem
+  min-width: 13rem
+  z-index: 1
+
+  strong
+    color: var(--color-bright)
+    font-size: 0.72rem
+    font-weight: 400
+
+  small
+    color: var(--color-gray)
+    font-size: 0.62rem
+
+.file-button
+  position: relative
+  z-index: 1
+  padding: 0.35rem 0.5rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.6rem
+
+  &:hover
+    color: var(--color-bright)
+    border-color: var(--color-green)
+
+  input
+    position: absolute
+    width: 1px
+    height: 1px
+    opacity: 0
+
+.waveform-canvas
+  position: absolute
+  top: 0
+  right: 0
+  bottom: 0
+  left: 0
+  width: 100%
+  height: 100%
+  opacity: 0.7
+  pointer-events: none
 
 .empty-clip
   max-width: 24rem

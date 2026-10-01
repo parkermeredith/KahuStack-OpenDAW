@@ -2,6 +2,7 @@
 
 export type TransportSnapshot = Readonly<{
     positionSeconds: number
+    durationSeconds: number
     isPlaying: boolean
     timecode: string
     musicalPosition: string
@@ -30,11 +31,19 @@ export class Transport {
     private positionSeconds = 0
     private startedAtSeconds = 0
     private playing = false
+    private durationSeconds: number
 
     constructor(
         private readonly clock: TransportClock = () => performance.now() / 1000,
-        private readonly durationSeconds = DEFAULT_TRANSPORT_DURATION_SECONDS
-    ) {}
+        durationSeconds = DEFAULT_TRANSPORT_DURATION_SECONDS
+    ) {
+        this.durationSeconds = Math.max(0.01, durationSeconds)
+    }
+
+    setDuration(seconds: number): void {
+        this.durationSeconds = Math.max(0.01, seconds)
+        this.positionSeconds = Math.min(this.positionSeconds, this.durationSeconds)
+    }
 
     play(): void {
         this.updatePosition()
@@ -77,6 +86,7 @@ export class Transport {
         this.updatePosition()
         return {
             positionSeconds: this.positionSeconds,
+            durationSeconds: this.durationSeconds,
             isPlaying: this.playing,
             timecode: formatTimecode(this.positionSeconds),
             musicalPosition: formatMusicalPosition(this.positionSeconds)
