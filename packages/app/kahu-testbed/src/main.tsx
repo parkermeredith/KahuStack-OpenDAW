@@ -10,6 +10,7 @@ import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport} from "./transport"
 import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track"
 import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
+import {RackStore} from "./rack-store"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
@@ -17,6 +18,7 @@ document.title = TestbedShell.title
 const audioContext = new AudioContext()
 const transport = new Transport(() => audioContext.currentTime)
 const trackStore = new TrackStore()
+const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
 let timeReadout: HTMLElement | undefined
 let musicalReadout: HTMLElement | undefined
@@ -29,6 +31,9 @@ let audioStatus: HTMLElement | undefined
 let audioMetadata: HTMLElement | undefined
 let trackList: HTMLElement | undefined
 let fileInput: HTMLInputElement | undefined
+let rackList: HTMLElement | undefined
+let rackTitle: HTMLElement | undefined
+let addRackSlotButton: HTMLButtonElement | undefined
 let animationFrame = 0
 
 const refreshTransport = (): void => {
@@ -121,9 +126,11 @@ const removeTrack = (id: string): void => {
     audioPlayers.get(id)?.stop()
     audioPlayers.delete(id)
     trackStore.remove(id)
+    rackStore.removeTrack(id)
     refreshTrackList()
     updateSelectedTrack()
     refreshTrackDuration()
+    refreshRack()
 }
 
 const refreshTrackList = (): void => {
@@ -147,6 +154,7 @@ const refreshTrackList = (): void => {
             trackStore.select(track.id)
             refreshTrackList()
             updateSelectedTrack()
+            refreshRack()
         }
         const color = document.createElement("span")
         color.className = "track-color"
@@ -207,6 +215,90 @@ const refreshTrackList = (): void => {
         }
         row.append(color, info, actions, gain)
         root.append(row)
+    }
+}
+
+const refreshRack = (): void => {
+    const root = rackList
+    if (root === undefined) {
+        return
+    }
+    root.replaceChildren()
+    const track = trackStore.selected()
+    if (track === undefined) {
+        rackTitle?.replaceChildren("Kahu Rack")
+        if (addRackSlotButton !== undefined) {
+            addRackSlotButton.disabled = true
+        }
+        const empty = document.createElement("div")
+        empty.className = "rack-empty"
+        empty.textContent = "Select an audio track to view its effect chain."
+        root.append(empty)
+        return
+    }
+    rackTitle?.replaceChildren(`Kahu Rack · ${track.name}`)
+    if (addRackSlotButton !== undefined) {
+        addRackSlotButton.disabled = false
+    }
+    const devices = rackStore.devicesFor(track.id)
+    if (devices.length === 0) {
+        const empty = document.createElement("div")
+        empty.className = "rack-empty"
+        empty.innerHTML = "<strong>Empty audio-effect chain</strong><span>Add a reference slot to verify rack lifecycle.</span>"
+        root.append(empty)
+        return
+    }
+    for (const [index, device] of devices.entries()) {
+        const card = document.createElement("article")
+        card.className = `rack-device${device.bypassed ? " bypassed" : ""}`
+        const cardHeader = document.createElement("div")
+        cardHeader.className = "rack-device-header"
+        const name = document.createElement("strong")
+        name.textContent = device.name
+        const status = document.createElement("small")
+        status.textContent = device.bypassed ? "BYPASSED" : "REFERENCE SLOT"
+        cardHeader.append(name, status)
+        const body = document.createElement("p")
+        body.textContent = "No Kahu processor attached"
+        const controls = document.createElement("div")
+        controls.className = "rack-device-controls"
+        const bypass = document.createElement("button")
+        bypass.className = `rack-control${device.bypassed ? " active" : ""}`
+        bypass.type = "button"
+        bypass.textContent = "BYP"
+        bypass.onclick = () => {
+            rackStore.setBypassed(track.id, device.id, !device.bypassed)
+            refreshRack()
+        }
+        const moveLeft = document.createElement("button")
+        moveLeft.className = "rack-control"
+        moveLeft.type = "button"
+        moveLeft.textContent = "‹"
+        moveLeft.disabled = index === 0
+        moveLeft.onclick = () => {
+            rackStore.move(track.id, device.id, -1)
+            refreshRack()
+        }
+        const moveRight = document.createElement("button")
+        moveRight.className = "rack-control"
+        moveRight.type = "button"
+        moveRight.textContent = "›"
+        moveRight.disabled = index === devices.length - 1
+        moveRight.onclick = () => {
+            rackStore.move(track.id, device.id, 1)
+            refreshRack()
+        }
+        const remove = document.createElement("button")
+        remove.className = "rack-control remove"
+        remove.type = "button"
+        remove.textContent = "×"
+        remove.onclick = () => {
+            rackStore.remove(track.id, device.id)
+            refreshRack()
+        }
+        controls.append(bypass, moveLeft, moveRight, remove)
+        card.append(cardHeader, body, controls)
+        root.append(card)
     }
 }
 
@@ -402,17 +494,21 @@ replaceChildren(document.body, (
             <div className="rack-heading">
                 <div>
                     <span className="eyebrow">PROCESSING</span>
-                    <h2>Kahu Rack</h2>
+                    <h2 onInit={element => rackTitle = element}>Kahu Rack</h2>
                 </div>
-                <span className="rack-note">Prepared Rust/WASM modules will load here</span>
+                <span className="rack-note">Audio effects only · reference lifecycle</span>
+                <button className="rack-add-button" type="button" onInit={element => {
+                    addRackSlotButton = element
+                    element.onclick = () => {
+                        const track = trackStore.selected()
+                        if (track !== undefined) {
+                            rackStore.addReferenceSlot(track.id)
+                            refreshRack()
+                        }
+                    }
+                }}>ADD SLOT</button>
             </div>
-            <div className="rack-empty">
-                <span className="rack-empty-mark" aria-hidden="true">＋</span>
-                <div>
-                    <strong>No module selected</strong>
-                    <p>KOD-4 will connect selected source tracks to the canonical Kahu runtime.</p>
-                </div>
-            </div>
+            <div className="rack-chain" onInit={element => rackList = element}/>
         </section>
         <footer className="testbed-footer">
             <span>kahustack-dsp</span>
@@ -423,4 +519,5 @@ replaceChildren(document.body, (
 
 refreshTrackList()
 updateSelectedTrack()
+refreshRack()
 refreshTransport()

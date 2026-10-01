@@ -458,11 +458,34 @@ button:disabled
 .rack-note
   margin-left: auto
 
+.rack-add-button
+  margin-left: 0.75rem
+  padding: 0.35rem 0.5rem
+  color: var(--color-green)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.6rem
+
+  &:disabled
+    opacity: 0.45
+    cursor: default
+
+.rack-chain
+  display: flex
+  align-items: stretch
+  gap: 0.5rem
+  height: calc(100% - 3.3rem)
+  padding: 0.55rem 0.65rem
+  overflow-x: auto
+
 .rack-empty
   display: flex
-  align-items: center
+  flex-direction: column
+  justify-content: center
   gap: 0.8rem
-  height: calc(100% - 3.3rem)
+  min-width: 20rem
   padding: 0.9rem 1.2rem
   color: var(--color-gray)
 
@@ -475,6 +498,68 @@ button:disabled
   p
     margin: 0.35rem 0 0
     font-size: 0.68rem
+
+.rack-device
+  display: flex
+  flex: 0 0 13rem
+  flex-direction: column
+  justify-content: space-between
+  min-height: 7rem
+  padding: 0.55rem 0.65rem
+  background: var(--color-panel-background-bright)
+  border-top: 2px solid var(--color-green)
+
+  &.bypassed
+    opacity: 0.55
+    border-top-color: var(--color-gray)
+
+  p
+    margin: 0.45rem 0
+    color: var(--color-gray)
+    font-size: 0.65rem
+
+.rack-device-header
+  display: flex
+  flex-direction: column
+  gap: 0.2rem
+
+  strong
+    color: var(--color-bright)
+    font-size: 0.72rem
+    font-weight: 400
+
+  small
+    color: var(--color-orange)
+    font-size: 0.55rem
+    letter-spacing: 0.05em
+
+.rack-device-controls
+  display: flex
+  gap: 0.2rem
+
+.rack-control
+  min-width: 1.65rem
+  min-height: 1.3rem
+  padding: 0.15rem 0.25rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.15rem
+  cursor: pointer
+  font-size: 0.55rem
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
+  &:disabled
+    opacity: 0.35
+    cursor: default
+
+  &.remove:hover
+    color: var(--color-red)
+    border-color: var(--color-red)
 
 .rack-empty-mark
   color: var(--color-green)
