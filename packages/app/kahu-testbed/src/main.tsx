@@ -9,17 +9,15 @@ import {TestbedShell} from "./shell"
 import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport} from "./transport"
 import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track"
 import {computeWaveformPeaks} from "./waveform"
+import {TrackState, TrackStore} from "./track-store"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
 
 const audioContext = new AudioContext()
 const transport = new Transport(() => audioContext.currentTime)
-const audioPlayer = new AudioTrackPlayer(audioContext, () => {
-    transport.stop()
-    restartTransportRefresh()
-})
-let decodedTrack: DecodedAudioFile | undefined
+const trackStore = new TrackStore()
+const audioPlayers = new Map<string, AudioTrackPlayer>()
 let timeReadout: HTMLElement | undefined
 let musicalReadout: HTMLElement | undefined
 let playhead: HTMLElement | undefined
@@ -29,8 +27,8 @@ let playButton: HTMLButtonElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
 let audioStatus: HTMLElement | undefined
 let audioMetadata: HTMLElement | undefined
-let trackTitle: HTMLElement | undefined
-let trackSummary: HTMLElement | undefined
+let trackList: HTMLElement | undefined
+let fileInput: HTMLInputElement | undefined
 let animationFrame = 0
 
 const refreshTransport = (): void => {
@@ -65,8 +63,8 @@ const restartTransportRefresh = (): void => {
 const seekFromInput = (value: string): void => {
     const position = Number(value)
     transport.seek(position)
-    if (audioPlayer.hasAudio() && transport.snapshot().isPlaying) {
-        audioPlayer.seek(position)
+    for (const player of audioPlayers.values()) {
+        player.seek(position)
     }
     restartTransportRefresh()
 }
@@ -89,39 +87,188 @@ const drawWaveform = (track: DecodedAudioFile): void => {
     }
 }
 
+const applyTrackGain = (track: TrackState): void => {
+    audioPlayers.get(track.id)?.setGain(trackStore.isAudible(track) ? track.gain : 0)
+}
+
+const refreshTrackPlayers = (): void => {
+    for (const track of trackStore.all()) {
+        applyTrackGain(track)
+    }
+}
+
+const refreshTrackDuration = (): void => {
+    const duration = trackStore.durationSeconds()
+    transport.setDuration(duration > 0 ? duration : DEFAULT_TRANSPORT_DURATION_SECONDS)
+    restartTransportRefresh()
+}
+
+const updateSelectedTrack = (): void => {
+    const track = trackStore.selected()
+    if (track === undefined) {
+        audioMetadata?.replaceChildren("WAV and browser-decodable audio")
+        audioStatus?.replaceChildren("Drop audio or choose a file")
+        waveformCanvas?.classList.add("hidden")
+        return
+    }
+    audioMetadata?.replaceChildren(`${track.audio.durationSeconds.toFixed(2)} s · ${track.audio.sampleRate} Hz · ${track.audio.channelCount} ch`)
+    audioStatus?.replaceChildren("Audio ready — press Play")
+    waveformCanvas?.classList.remove("hidden")
+    drawWaveform(track.audio)
+}
+
+const removeTrack = (id: string): void => {
+    audioPlayers.get(id)?.stop()
+    audioPlayers.delete(id)
+    trackStore.remove(id)
+    refreshTrackList()
+    updateSelectedTrack()
+    refreshTrackDuration()
+}
+
+const refreshTrackList = (): void => {
+    const root = trackList
+    if (root === undefined) {
+        return
+    }
+    root.replaceChildren()
+    const tracks = trackStore.all()
+    if (tracks.length === 0) {
+        const empty = document.createElement("div")
+        empty.className = "track-empty"
+        empty.textContent = "Load source audio to add a track."
+        root.append(empty)
+        return
+    }
+    for (const track of tracks) {
+        const row = document.createElement("div")
+        row.className = `track-row${trackStore.selected() === track ? " selected" : ""}`
+        row.onclick = () => {
+            trackStore.select(track.id)
+            refreshTrackList()
+            updateSelectedTrack()
+        }
+        const color = document.createElement("span")
+        color.className = "track-color"
+        const info = document.createElement("div")
+        info.className = "track-info"
+        const title = document.createElement("strong")
+        title.textContent = track.name
+        const summary = document.createElement("small")
+        summary.textContent = `${track.audio.durationSeconds.toFixed(1)} s · ${track.id}`
+        info.append(title, summary)
+        const actions = document.createElement("div")
+        actions.className = "track-actions"
+        const mute = document.createElement("button")
+        mute.className = `track-action${track.muted ? " active" : ""}`
+        mute.type = "button"
+        mute.textContent = "M"
+        mute.title = "Mute track"
+        mute.onclick = event => {
+            event.stopPropagation()
+            trackStore.setMuted(track.id, !track.muted)
+            refreshTrackPlayers()
+            refreshTrackList()
+        }
+        const solo = document.createElement("button")
+        solo.className = `track-action${track.solo ? " active" : ""}`
+        solo.type = "button"
+        solo.textContent = "S"
+        solo.title = "Solo track"
+        solo.onclick = event => {
+            event.stopPropagation()
+            trackStore.setSolo(track.id, !track.solo)
+            refreshTrackPlayers()
+            refreshTrackList()
+        }
+        const remove = document.createElement("button")
+        remove.className = "track-action remove"
+        remove.type = "button"
+        remove.textContent = "×"
+        remove.title = "Remove track"
+        remove.onclick = event => {
+            event.stopPropagation()
+            removeTrack(track.id)
+        }
+        actions.append(mute, solo, remove)
+        const gain = document.createElement("input")
+        gain.className = "track-gain"
+        gain.type = "range"
+        gain.min = "0"
+        gain.max = "1"
+        gain.step = "0.01"
+        gain.value = track.gain.toString()
+        gain.title = "Track gain"
+        gain.setAttribute("aria-label", `${track.name} gain`)
+        gain.oninput = event => {
+            event.stopPropagation()
+            trackStore.setGain(track.id, Number(gain.value))
+            applyTrackGain(track)
+        }
+        row.append(color, info, actions, gain)
+        root.append(row)
+    }
+}
+
+const handleAudioEnded = (): void => {
+    if (transport.snapshot().isPlaying && !Array.from(audioPlayers.values()).some(player => player.isPlaying())) {
+        transport.stop()
+        restartTransportRefresh()
+    }
+}
+
+const stopAllPlayers = (): void => {
+    for (const player of audioPlayers.values()) {
+        player.stop()
+    }
+}
+
+const pauseAllPlayers = (): void => {
+    for (const player of audioPlayers.values()) {
+        player.pause()
+    }
+}
+
+const playAllPlayers = (): void => {
+    const position = transport.snapshot().positionSeconds
+    for (const track of trackStore.all()) {
+        const player = audioPlayers.get(track.id)
+        if (player !== undefined) {
+            applyTrackGain(track)
+            player.play(position)
+        }
+    }
+}
+
 const loadAudio = async (file: File): Promise<void> => {
     try {
-        audioPlayer.stop()
-        transport.stop()
         const track = await decodeAudioFile(audioContext, file)
-        decodedTrack = track
-        audioPlayer.load(track.buffer)
-        transport.setDuration(track.durationSeconds)
-        trackTitle?.replaceChildren(track.name)
-        trackSummary?.replaceChildren("Ready")
-        audioMetadata?.replaceChildren(`${track.durationSeconds.toFixed(2)} s · ${track.sampleRate} Hz · ${track.channelCount} ch`)
-        audioStatus?.replaceChildren("Audio ready — press Play")
-        waveformCanvas?.classList.remove("hidden")
-        drawWaveform(track)
+        const wasPlaying = transport.snapshot().isPlaying
+        const state = trackStore.add(track)
+        const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
+        player.load(track.buffer)
+        audioPlayers.set(state.id, player)
+        refreshTrackList()
+        updateSelectedTrack()
+        refreshTrackDuration()
+        if (wasPlaying) {
+            playAllPlayers()
+        }
         restartTransportRefresh()
     } catch {
-        decodedTrack = undefined
-        audioPlayer.clear()
         audioStatus?.replaceChildren(`Unable to decode ${file.name}`)
-        trackSummary?.replaceChildren("Decode failed")
+        audioMetadata?.replaceChildren("Choose another browser-decodable audio file")
     }
 }
 
 const toggleTransport = async (): Promise<void> => {
     if (transport.snapshot().isPlaying) {
-        audioPlayer.pause()
+        pauseAllPlayers()
         transport.pause()
     } else {
         await audioContext.resume()
         transport.play()
-        if (decodedTrack !== undefined) {
-            audioPlayer.play(transport.snapshot().positionSeconds)
-        }
+        playAllPlayers()
     }
     restartTransportRefresh()
 }
@@ -148,16 +295,11 @@ replaceChildren(document.body, (
             <aside className="track-panel" aria-label="Track list">
                 <div className="panel-heading">
                     <span>TRACKS</span>
-                    <button className="icon-button" type="button" disabled aria-label="Add track">+</button>
+                    <button className="icon-button" type="button" aria-label="Add track" onInit={element => {
+                        element.onclick = () => fileInput?.click()
+                    }}>+</button>
                 </div>
-                <div className="track-row selected">
-                    <span className="track-color" aria-hidden="true"/>
-                    <div>
-                        <strong onInit={element => trackTitle = element}>Main Input</strong>
-                        <small onInit={element => trackSummary = element}>Awaiting source audio</small>
-                    </div>
-                </div>
-                <div className="track-empty">Add a Kahu module to begin.</div>
+                <div className="track-list" onInit={element => trackList = element}/>
             </aside>
             <section className="timeline-panel" aria-label="Timeline">
                 <div className="timeline-toolbar">
@@ -168,7 +310,7 @@ replaceChildren(document.body, (
                         }}>▶</button>
                         <button className="stop-button" type="button" aria-label="Stop" onInit={element => {
                             element.onclick = () => {
-                                audioPlayer.stop()
+                                stopAllPlayers()
                                 transport.stop()
                                 restartTransportRefresh()
                             }
@@ -230,10 +372,13 @@ replaceChildren(document.body, (
                                 </div>
                                 <label className="file-button">LOAD AUDIO
                                     <input type="file" accept="audio/*" aria-label="Choose source audio"
-                                           onInit={element => element.onchange = () => {
-                                               const file = element.files?.[0]
-                                               if (file !== undefined) {
-                                                   void loadAudio(file)
+                                           onInit={element => {
+                                               fileInput = element
+                                               element.onchange = () => {
+                                                   const file = element.files?.[0]
+                                                   if (file !== undefined) {
+                                                       void loadAudio(file)
+                                                   }
                                                }
                                            }}/>
                                 </label>
@@ -275,3 +420,7 @@ replaceChildren(document.body, (
         </footer>
     </main>
 ))
+
+refreshTrackList()
+updateSelectedTrack()
+refreshTransport()

@@ -24,8 +24,12 @@ export class AudioTrackPlayer {
     private buffer: AudioBuffer | undefined
     private startedAtSeconds = 0
     private offsetSeconds = 0
+    private readonly gainNode: GainNode
 
-    constructor(private readonly context: AudioContext, private readonly onEnded?: () => void) {}
+    constructor(private readonly context: AudioContext, private readonly onEnded?: () => void) {
+        this.gainNode = context.createGain()
+        this.gainNode.connect(context.destination)
+    }
 
     load(buffer: AudioBuffer): void {
         this.stop()
@@ -48,7 +52,7 @@ export class AudioTrackPlayer {
         const safeOffset = Math.min(buffer.duration, Math.max(0, offsetSeconds))
         const source = this.context.createBufferSource()
         source.buffer = buffer
-        source.connect(this.context.destination)
+        source.connect(this.gainNode)
         source.onended = () => {
             if (this.source === source) {
                 this.source = undefined
@@ -94,6 +98,14 @@ export class AudioTrackPlayer {
 
     hasAudio(): boolean {
         return this.buffer !== undefined
+    }
+
+    isPlaying(): boolean {
+        return this.source !== undefined
+    }
+
+    setGain(gain: number): void {
+        this.gainNode.gain.setValueAtTime(Math.min(1, Math.max(0, gain)), this.context.currentTime)
     }
 
     private stopSource(): void {

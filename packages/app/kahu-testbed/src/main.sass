@@ -160,6 +160,43 @@ button:disabled
     color: var(--color-gray)
     font-size: 0.62rem
 
+.track-info
+  min-width: 0
+  flex: 1 1 auto
+
+  strong, small
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+
+.track-actions
+  display: flex
+  gap: 0.15rem
+
+.track-action
+  width: 1.2rem
+  height: 1.2rem
+  padding: 0
+  color: var(--color-gray)
+  background: transparent
+  border: 1px solid rgba(white, 0.08)
+  border-radius: 0.15rem
+  cursor: pointer
+  font-size: 0.56rem
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
+  &.remove:hover
+    color: var(--color-red)
+    border-color: var(--color-red)
+
+.track-gain
+  width: 3.2rem
+  accent-color: var(--color-green)
+
 .track-color
   width: 0.25rem
   height: 2rem
