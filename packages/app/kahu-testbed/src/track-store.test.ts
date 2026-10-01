@@ -9,7 +9,7 @@ const audio = (name: string, durationSeconds: number) => ({
     buffer: {} as AudioBuffer
 })
 
-describe("KOD-4 track store", () => {
+describe("KBW-4 track store", () => {
     it("assigns stable IDs and retains selection", () => {
         const store = new TrackStore()
         const first = store.add(audio("Drums.wav", 4))
@@ -32,5 +32,13 @@ describe("KOD-4 track store", () => {
         expect(store.isAudible(second)).toBe(false)
         expect(first.gain).toBe(0.4)
         expect(store.durationSeconds()).toBe(6)
+    })
+
+    it("retains minimal timeline and source offsets", () => {
+        const store = new TrackStore()
+        const track = store.add(audio("Vocal.wav", 8))
+        store.setRegionTiming(track.id, 3, 2)
+        expect(track.region).toEqual({timelineStartSeconds: 3, sourceOffsetSeconds: 2, durationSeconds: 6})
+        expect(store.durationSeconds()).toBe(9)
     })
 })

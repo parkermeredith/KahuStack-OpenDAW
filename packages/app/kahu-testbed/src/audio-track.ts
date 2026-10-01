@@ -47,7 +47,7 @@ export class AudioTrackPlayer {
         this.offsetSeconds = 0
     }
 
-    playAt(startTimeSeconds: number, offsetSeconds = this.offsetSeconds): boolean {
+    playAt(startTimeSeconds: number, offsetSeconds = this.offsetSeconds, durationSeconds?: number): boolean {
         const buffer = this.buffer
         if (buffer === undefined) {
             return false
@@ -64,7 +64,14 @@ export class AudioTrackPlayer {
                 this.onEnded?.()
             }
         }
-        source.start(startTimeSeconds, safeOffset)
+        const safeDuration = durationSeconds === undefined
+            ? undefined
+            : Math.min(Math.max(0, durationSeconds), Math.max(0, buffer.duration - safeOffset))
+        if (safeDuration === undefined || safeDuration <= 0) {
+            source.start(startTimeSeconds, safeOffset)
+        } else {
+            source.start(startTimeSeconds, safeOffset, safeDuration)
+        }
         this.source = source
         this.offsetSeconds = safeOffset
         this.startedAtSeconds = startTimeSeconds

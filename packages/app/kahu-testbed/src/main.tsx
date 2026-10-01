@@ -10,6 +10,7 @@ import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport, TransportEpoch} from "./t
 import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track"
 import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
+import {planRegionPlayback} from "./region"
 import {RackStore} from "./rack-store"
 import {KahuGainRuntime, KahuModuleManifest, KahuParameterManifest} from "./kahu-runtime"
 import {
@@ -42,6 +43,8 @@ let musicalReadout: HTMLElement | undefined
 let playhead: HTMLElement | undefined
 let seekInput: HTMLInputElement | undefined
 let positionInput: HTMLInputElement | undefined
+let timelineStartInput: HTMLInputElement | undefined
+let sourceOffsetInput: HTMLInputElement | undefined
 let playButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
@@ -188,7 +191,17 @@ const updateSelectedTrack = (): void => {
         waveformCanvas?.classList.add("hidden")
         return
     }
-    audioMetadata?.replaceChildren(`${track.audio.durationSeconds.toFixed(2)} s · ${track.audio.sampleRate} Hz · ${track.audio.channelCount} ch`)
+    audioMetadata?.replaceChildren(
+        `${track.audio.durationSeconds.toFixed(2)} s · ${track.audio.sampleRate} Hz · ${track.audio.channelCount} ch `
+        + `· region ${track.region.timelineStartSeconds.toFixed(2)} s / source ${track.region.sourceOffsetSeconds.toFixed(2)} s`,
+    )
+    if (timelineStartInput !== undefined) {
+        timelineStartInput.value = track.region.timelineStartSeconds.toFixed(2)
+    }
+    if (sourceOffsetInput !== undefined) {
+        sourceOffsetInput.value = track.region.sourceOffsetSeconds.toFixed(2)
+        sourceOffsetInput.max = track.audio.durationSeconds.toString()
+    }
     audioStatus?.replaceChildren("Audio ready — press Play")
     waveformCanvas?.classList.remove("hidden")
     drawWaveform(track.audio)
@@ -562,9 +575,32 @@ const playAllPlayers = (epoch: TransportEpoch): void => {
         const player = audioPlayers.get(track.id)
         if (player !== undefined) {
             applyTrackGain(track)
-            player.playAt(epoch.startTimeSeconds, epoch.positionSeconds)
+            const plan = planRegionPlayback(track.region, epoch.positionSeconds, track.audio.durationSeconds)
+            if (plan === undefined) {
+                player.stop()
+            } else {
+                player.playAt(
+                    epoch.startTimeSeconds + plan.delaySeconds,
+                    plan.sourceOffsetSeconds,
+                    plan.durationSeconds,
+                )
+            }
         }
     }
+}
+
+const updateSelectedRegion = (): void => {
+    const track = trackStore.selected()
+    if (track === undefined) return
+    trackStore.setRegionTiming(
+        track.id,
+        Number(timelineStartInput?.value ?? 0),
+        Number(sourceOffsetInput?.value ?? 0),
+    )
+    refreshTrackDuration()
+    updateSelectedTrack()
+    const epoch = transport.reschedule()
+    if (epoch !== undefined) playAllPlayers(epoch)
 }
 
 const loadAudio = async (file: File): Promise<void> => {
@@ -681,6 +717,22 @@ replaceChildren(document.body, (
                                    }
                                }
                            }}/>
+                    <div className="region-controls" aria-label="Selected region timing">
+                        <label>START
+                            <input type="number" min="0" step="0.01" value="0" aria-label="Region timeline start"
+                                   onInit={element => {
+                                       timelineStartInput = element
+                                       element.onchange = updateSelectedRegion
+                                   }}/>
+                        </label>
+                        <label>SOURCE
+                            <input type="number" min="0" step="0.01" value="0" aria-label="Region source offset"
+                                   onInit={element => {
+                                       sourceOffsetInput = element
+                                       element.onchange = updateSelectedRegion
+                                   }}/>
+                        </label>
+                    </div>
                     <div className="toolbar-spacer"/>
                     <label className="zoom-control">ZOOM
                         <input type="range" min="1" max="4" step="0.25" value="1" aria-label="Timeline zoom"

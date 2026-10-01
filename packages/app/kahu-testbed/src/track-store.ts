@@ -1,6 +1,7 @@
-// KOD-4 track authority: stable track identity and selection/mute/solo/gain state for the testbed session.
+// KBW-4 track authority: stable identity, channel state, and one minimal timed source region per track.
 
 import type {DecodedAudioFile} from "./audio-track"
+import {createAudioRegion, type AudioRegion} from "./region"
 
 export type TrackState = {
     readonly id: string
@@ -9,6 +10,7 @@ export type TrackState = {
     muted: boolean
     solo: boolean
     gain: number
+    region: AudioRegion
 }
 
 export class TrackStore {
@@ -19,7 +21,15 @@ export class TrackStore {
     add(audio: DecodedAudioFile): TrackState {
         const id = `track-${this.nextId.toString().padStart(2, "0")}`
         this.nextId += 1
-        const track: TrackState = {id, audio, name: audio.name, muted: false, solo: false, gain: 1}
+        const track: TrackState = {
+            id,
+            audio,
+            name: audio.name,
+            muted: false,
+            solo: false,
+            gain: 1,
+            region: createAudioRegion(audio.durationSeconds),
+        }
         this.tracks.set(id, track)
         this.selectedTrackId = id
         return track
@@ -68,11 +78,25 @@ export class TrackStore {
         }
     }
 
+    setRegionTiming(id: string, timelineStartSeconds: number, sourceOffsetSeconds: number): void {
+        const track = this.tracks.get(id)
+        if (track === undefined) return
+        const safeSourceOffset = Math.min(track.audio.durationSeconds, Math.max(0, sourceOffsetSeconds))
+        track.region = {
+            timelineStartSeconds: Math.max(0, timelineStartSeconds),
+            sourceOffsetSeconds: safeSourceOffset,
+            durationSeconds: Math.max(0, track.audio.durationSeconds - safeSourceOffset),
+        }
+    }
+
     isAudible(track: TrackState): boolean {
         return !track.muted && (!this.all().some(candidate => candidate.solo) || track.solo)
     }
 
     durationSeconds(): number {
-        return this.all().reduce((duration, track) => Math.max(duration, track.audio.durationSeconds), 0)
+        return this.all().reduce(
+            (duration, track) => Math.max(duration, track.region.timelineStartSeconds + track.region.durationSeconds),
+            0,
+        )
     }
 }
