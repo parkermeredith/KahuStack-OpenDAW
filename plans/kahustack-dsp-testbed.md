@@ -30,6 +30,11 @@ KOD-1 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
 and the minimal header, timeline, track list, and rack shell. Its focused test, lint, build,
 and local HTTP launch checks pass; visual cross-browser qualification remains owner-run.
 
+KOD-2 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`10087c69e`. The testbed now has a pure, bounded transport model with play/pause, stop,
+seek-by-range, typed seek, timecode and musical-position displays, plus four passing focused
+tests. Browser interaction and timing/audio-device qualification remain owner-run.
+
 ---
 
 ## 1. Product goal
