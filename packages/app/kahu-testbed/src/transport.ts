@@ -1,4 +1,4 @@
-// KOD-2 transport authority: bounded play, pause, stop and seek state with no audio processing.
+// KBW-3 transport authority: one sample-clock epoch for UI state and synchronized track scheduling.
 
 export type TransportSnapshot = Readonly<{
     positionSeconds: number
@@ -9,9 +9,14 @@ export type TransportSnapshot = Readonly<{
 }>
 
 export type TransportClock = () => number
+export type TransportEpoch = Readonly<{
+    startTimeSeconds: number
+    positionSeconds: number
+}>
 
 export const DEFAULT_TRANSPORT_DURATION_SECONDS = 300
 export const DEFAULT_TEMPO_BPM = 120
+export const DEFAULT_TRANSPORT_SAFETY_OFFSET_SECONDS = 0.01
 
 export const formatTimecode = (seconds: number): string => {
     const hundredths = Math.max(0, Math.floor(seconds * 100))
@@ -35,7 +40,8 @@ export class Transport {
 
     constructor(
         private readonly clock: TransportClock = () => performance.now() / 1000,
-        durationSeconds = DEFAULT_TRANSPORT_DURATION_SECONDS
+        durationSeconds = DEFAULT_TRANSPORT_DURATION_SECONDS,
+        private readonly safetyOffsetSeconds = DEFAULT_TRANSPORT_SAFETY_OFFSET_SECONDS
     ) {
         this.durationSeconds = Math.max(0.01, durationSeconds)
     }
@@ -45,20 +51,21 @@ export class Transport {
         this.positionSeconds = Math.min(this.positionSeconds, this.durationSeconds)
     }
 
-    play(): void {
+    play(): TransportEpoch {
         this.updatePosition()
         if (this.positionSeconds >= this.durationSeconds) {
             this.positionSeconds = 0
         }
         if (!this.playing) {
-            this.startedAtSeconds = this.clock()
-            this.playing = true
+            return this.scheduleAt(this.positionSeconds)
         }
+        return {startTimeSeconds: this.startedAtSeconds, positionSeconds: this.positionSeconds}
     }
 
-    pause(): void {
+    pause(): number {
         this.updatePosition()
         this.playing = false
+        return this.positionSeconds
     }
 
     stop(): void {
@@ -75,11 +82,19 @@ export class Transport {
         }
     }
 
-    seek(seconds: number): void {
+    seek(seconds: number): TransportEpoch | undefined {
+        this.updatePosition()
         this.positionSeconds = Math.min(this.durationSeconds, Math.max(0, seconds))
         if (this.playing) {
-            this.startedAtSeconds = this.clock()
+            return this.scheduleAt(this.positionSeconds)
         }
+        return undefined
+    }
+
+    reschedule(): TransportEpoch | undefined {
+        if (!this.playing) return undefined
+        this.updatePosition()
+        return this.scheduleAt(this.positionSeconds)
     }
 
     snapshot(): TransportSnapshot {
@@ -98,11 +113,18 @@ export class Transport {
             return
         }
         const now = this.clock()
-        this.positionSeconds += now - this.startedAtSeconds
+        this.positionSeconds += Math.max(0, now - this.startedAtSeconds)
         this.startedAtSeconds = now
         if (this.positionSeconds >= this.durationSeconds) {
             this.positionSeconds = this.durationSeconds
             this.playing = false
         }
+    }
+
+    private scheduleAt(positionSeconds: number): TransportEpoch {
+        const startTimeSeconds = this.clock() + Math.min(0.1, Math.max(0, this.safetyOffsetSeconds))
+        this.startedAtSeconds = startTimeSeconds
+        this.playing = true
+        return {startTimeSeconds, positionSeconds}
     }
 }

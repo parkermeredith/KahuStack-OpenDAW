@@ -6,7 +6,7 @@ import "./main.sass"
 import {replaceChildren, createElement} from "@opendaw/lib-jsx"
 import {initializeColors} from "@opendaw/studio-enums"
 import {TestbedShell} from "./shell"
-import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport} from "./transport"
+import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport, TransportEpoch} from "./transport"
 import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track"
 import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
@@ -135,9 +135,13 @@ const restartTransportRefresh = (): void => {
 
 const seekFromInput = (value: string): void => {
     const position = Number(value)
-    transport.seek(position)
-    for (const player of audioPlayers.values()) {
-        player.seek(position)
+    const epoch = transport.seek(position)
+    if (epoch !== undefined) {
+        playAllPlayers(epoch)
+    } else {
+        for (const player of audioPlayers.values()) {
+            player.seek(position)
+        }
     }
     restartTransportRefresh()
 }
@@ -547,19 +551,18 @@ const stopAllPlayers = (): void => {
     }
 }
 
-const pauseAllPlayers = (): void => {
+const pauseAllPlayers = (positionSeconds: number): void => {
     for (const player of audioPlayers.values()) {
-        player.pause()
+        player.pauseAt(positionSeconds)
     }
 }
 
-const playAllPlayers = (): void => {
-    const position = transport.snapshot().positionSeconds
+const playAllPlayers = (epoch: TransportEpoch): void => {
     for (const track of trackStore.all()) {
         const player = audioPlayers.get(track.id)
         if (player !== undefined) {
             applyTrackGain(track)
-            player.play(position)
+            player.playAt(epoch.startTimeSeconds, epoch.positionSeconds)
         }
     }
 }
@@ -579,7 +582,8 @@ const loadAudio = async (file: File): Promise<void> => {
         refreshTrackDuration()
         void initializeRuntime(state.id, device.id, device.moduleId ?? "utility.gain")
         if (wasPlaying) {
-            playAllPlayers()
+            const epoch = transport.reschedule()
+            if (epoch !== undefined) playAllPlayers(epoch)
         }
         restartTransportRefresh()
     } catch {
@@ -590,12 +594,11 @@ const loadAudio = async (file: File): Promise<void> => {
 
 const toggleTransport = async (): Promise<void> => {
     if (transport.snapshot().isPlaying) {
-        pauseAllPlayers()
-        transport.pause()
+        const position = transport.pause()
+        pauseAllPlayers(position)
     } else {
         await audioContext.resume()
-        transport.play()
-        playAllPlayers()
+        playAllPlayers(transport.play())
     }
     restartTransportRefresh()
 }

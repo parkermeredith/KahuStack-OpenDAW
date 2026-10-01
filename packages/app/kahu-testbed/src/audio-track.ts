@@ -1,4 +1,4 @@
-// KOD-3 browser audio boundary: decodes admitted source audio and schedules it through Web Audio.
+// KBW-3 browser audio boundary: decodes admitted source audio and schedules it at a shared Web Audio epoch.
 
 export type DecodedAudioFile = Readonly<{
     name: string
@@ -47,7 +47,7 @@ export class AudioTrackPlayer {
         this.offsetSeconds = 0
     }
 
-    play(offsetSeconds = this.offsetSeconds): boolean {
+    playAt(startTimeSeconds: number, offsetSeconds = this.offsetSeconds): boolean {
         const buffer = this.buffer
         if (buffer === undefined) {
             return false
@@ -64,16 +64,20 @@ export class AudioTrackPlayer {
                 this.onEnded?.()
             }
         }
-        source.start(0, safeOffset)
+        source.start(startTimeSeconds, safeOffset)
         this.source = source
         this.offsetSeconds = safeOffset
-        this.startedAtSeconds = this.context.currentTime - safeOffset
+        this.startedAtSeconds = startTimeSeconds
         return true
     }
 
-    pause(): void {
-        this.offsetSeconds = this.positionSeconds()
+    pauseAt(offsetSeconds = this.positionSeconds()): void {
+        this.offsetSeconds = this.clampOffset(offsetSeconds)
         this.stopSource()
+    }
+
+    play(offsetSeconds = this.offsetSeconds): boolean {
+        return this.playAt(this.context.currentTime + 0.01, offsetSeconds)
     }
 
     stop(): void {
@@ -81,11 +85,11 @@ export class AudioTrackPlayer {
         this.offsetSeconds = 0
     }
 
-    seek(offsetSeconds: number): void {
+    seek(offsetSeconds: number, startTimeSeconds?: number): void {
         const wasPlaying = this.source !== undefined
         this.offsetSeconds = this.clampOffset(offsetSeconds)
         if (wasPlaying) {
-            this.play(this.offsetSeconds)
+            this.playAt(startTimeSeconds ?? this.context.currentTime + 0.01, this.offsetSeconds)
         }
     }
 
