@@ -181,9 +181,52 @@ button:disabled
   color: var(--color-green)
   font-size: 0.65rem
 
+.transport-controls
+  display: flex
+  align-items: center
+
+.transport-button, .stop-button
+  display: grid
+  place-items: center
+  width: 1.6rem
+  height: 1.6rem
+  padding: 0
+  color: var(--color-green)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.65rem
+
+.stop-button
+  margin-left: 0.25rem
+  margin-right: 0.6rem
+  color: var(--color-gray)
+
 .time-readout
+  display: flex
+  align-items: baseline
+  gap: 0.5rem
   color: var(--color-bright)
   font-size: 0.78rem
+
+.musical-readout
+  color: var(--color-green)
+  font-size: 0.65rem
+
+.position-input
+  width: 4.2rem
+  margin-left: 0.75rem
+  padding: 0.2rem 0.3rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.08)
+  border-radius: 0.2rem
+  font-size: 0.65rem
+
+.transport-button:hover, .stop-button:hover
+  color: var(--color-bright)
+  border-color: var(--color-green)
 
 .timeline-canvas
   position: relative
@@ -230,6 +273,51 @@ button:disabled
   background: var(--color-panel-background-bright)
   border-left: 2px solid var(--color-green)
   font-size: 0.68rem
+
+.playhead
+  position: absolute
+  top: 2rem
+  bottom: 0
+  left: 0
+  z-index: 2
+  width: 1px
+  background: var(--color-orange)
+  pointer-events: none
+
+.seek-slider
+  position: absolute
+  right: 1rem
+  bottom: 0.6rem
+  left: 7rem
+  z-index: 3
+  width: calc(100% - 8rem)
+  height: 1rem
+  appearance: none
+  background: transparent
+  cursor: ew-resize
+
+  &::-webkit-slider-runnable-track
+    height: 2px
+    background: rgba(white, 0.14)
+
+  &::-webkit-slider-thumb
+    width: 8px
+    height: 8px
+    margin-top: -3px
+    appearance: none
+    background: var(--color-orange)
+    border-radius: 50%
+
+  &::-moz-range-track
+    height: 2px
+    background: rgba(white, 0.14)
+
+  &::-moz-range-thumb
+    width: 8px
+    height: 8px
+    background: var(--color-orange)
+    border: none
+    border-radius: 50%
 
 .rack-panel
   flex: 0 0 11rem

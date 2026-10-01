@@ -6,9 +6,51 @@ import "./main.sass"
 import {replaceChildren, createElement} from "@opendaw/lib-jsx"
 import {initializeColors} from "@opendaw/studio-enums"
 import {TestbedShell} from "./shell"
+import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport} from "./transport"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
+
+const transport = new Transport()
+let timeReadout: HTMLElement | undefined
+let musicalReadout: HTMLElement | undefined
+let playhead: HTMLElement | undefined
+let seekInput: HTMLInputElement | undefined
+let positionInput: HTMLInputElement | undefined
+let playButton: HTMLButtonElement | undefined
+let animationFrame = 0
+
+const refreshTransport = (): void => {
+    const snapshot = transport.snapshot()
+    timeReadout?.replaceChildren(snapshot.timecode)
+    musicalReadout?.replaceChildren(snapshot.musicalPosition)
+    playButton?.replaceChildren(snapshot.isPlaying ? "Ⅱ" : "▶")
+    playButton?.setAttribute("aria-label", snapshot.isPlaying ? "Pause" : "Play")
+    playhead?.style.setProperty("left", `${snapshot.positionSeconds / DEFAULT_TRANSPORT_DURATION_SECONDS * 100}%`)
+    if (seekInput !== undefined) {
+        seekInput.value = snapshot.positionSeconds.toString()
+    }
+    if (positionInput !== undefined && document.activeElement !== positionInput) {
+        positionInput.value = snapshot.positionSeconds.toFixed(2)
+    }
+    if (snapshot.isPlaying) {
+        animationFrame = requestAnimationFrame(refreshTransport)
+    } else {
+        animationFrame = 0
+    }
+}
+
+const restartTransportRefresh = (): void => {
+    if (animationFrame !== 0) {
+        cancelAnimationFrame(animationFrame)
+    }
+    refreshTransport()
+}
+
+const seekFromInput = (value: string): void => {
+    transport.seek(Number(value))
+    restartTransportRefresh()
+}
 
 replaceChildren(document.body, (
     <main className="testbed-shell">
@@ -45,10 +87,39 @@ replaceChildren(document.body, (
             </aside>
             <section className="timeline-panel" aria-label="Timeline">
                 <div className="timeline-toolbar">
-                    <button className="transport-button" type="button" disabled aria-label="Transport is not connected yet">▶</button>
-                    <span className="time-readout">00:00:00:00</span>
+                    <div className="transport-controls">
+                        <button className="transport-button" type="button" aria-label="Play" onInit={element => {
+                            playButton = element
+                            element.onclick = () => {
+                                transport.toggle()
+                                restartTransportRefresh()
+                            }
+                        }}>▶</button>
+                        <button className="stop-button" type="button" aria-label="Stop" onInit={element => {
+                            element.onclick = () => {
+                                transport.stop()
+                                restartTransportRefresh()
+                            }
+                        }}>■</button>
+                    </div>
+                    <div className="time-readout">
+                        <span onInit={element => timeReadout = element}>00:00:00</span>
+                        <span className="musical-readout" onInit={element => musicalReadout = element}>1.1</span>
+                    </div>
+                    <input className="position-input" type="number" min="0" max={`${DEFAULT_TRANSPORT_DURATION_SECONDS}`}
+                           step="0.01" value="0" aria-label="Seek position in seconds"
+                           onInit={element => {
+                               positionInput = element
+                               element.onchange = () => seekFromInput(element.value)
+                               element.onkeydown = event => {
+                                   if (event.key === "Enter") {
+                                       seekFromInput(element.value)
+                                       element.blur()
+                                   }
+                               }
+                           }}/>
                     <div className="toolbar-spacer"/>
-                    <span className="timeline-note">Timeline shell · no audio graph attached</span>
+                    <span className="timeline-note">Transport clock · no audio graph attached</span>
                 </div>
                 <div className="timeline-canvas">
                     <div className="ruler" aria-hidden="true">
@@ -60,6 +131,13 @@ replaceChildren(document.body, (
                             <div className="empty-clip">Kahu DSP modules will appear here</div>
                         </div>
                     </div>
+                    <div className="playhead" aria-hidden="true" onInit={element => playhead = element}/>
+                    <input className="seek-slider" type="range" min="0" max={`${DEFAULT_TRANSPORT_DURATION_SECONDS}`}
+                           step="0.01" value="0" aria-label="Seek timeline"
+                           onInit={element => {
+                               seekInput = element
+                               element.oninput = () => seekFromInput(element.value)
+                           }}/>
                 </div>
             </section>
         </section>
