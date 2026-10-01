@@ -35,6 +35,12 @@ KOD-2 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
 seek-by-range, typed seek, timecode and musical-position displays, plus four passing focused
 tests. Browser interaction and timing/audio-device qualification remain owner-run.
 
+KOD-3 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`5c2107841`. The testbed now includes one browser-decodable audio track, file picker and
+drag/drop loading, source metadata, bounded waveform peak rendering, horizontal zoom, and
+Web Audio source scheduling on the shared transport. Focused tests, lint, and production build
+pass; the first real audio-file/browser qualification remains owner-run.
+
 ---
 
 ## 1. Product goal
