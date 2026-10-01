@@ -14,6 +14,16 @@ This document defines the implementation program for turning the KahuStack openD
 
 It is subordinate to the KahuStack DSP repository authorities for DSP semantics, module IDs, parameter/state behavior, Rust/WASM lineage, realtime rules, and validation policy. This repository owns the experimental DAW shell and its openDAW-derived integration code; it must not silently redefine KahuStack DSP behavior.
 
+## Current implementation status
+
+KOD-0 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at fork commit
+`e6540064c0253e44910346d7faaf3d74e36c28c2` with parent integration commit
+`efef42e5816ff773f95adfa9f3817151157239fe`. Node 24, Rust 1.95 MSVC, nightly Rust and
+`wasm32-unknown-unknown` are installed. The full Studio build passes on Windows through
+`npm run build -- --filter=@opendaw/app-studio`, including the Rust engine and device WASM
+artifacts. Studio serves successfully at `https://localhost:8080/` with the required
+cross-origin-isolation headers; visual/browser/audio-device qualification remains owner-run.
+
 ---
 
 ## 1. Product goal
