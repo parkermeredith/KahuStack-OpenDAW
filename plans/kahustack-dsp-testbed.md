@@ -59,6 +59,25 @@ and routes a track through the worklet with gain/bypass controls and failure sur
 direct ABI smoke and app tests/build pass; owner browser listening and runtime-handshake proof
 remain pending.
 
+KOD-7 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`07ef31b43`. The rack is catalog-driven, retains stable module/device identity across
+reorder/remove, chains retained Rust-WASM worklet nodes, exposes generated parameters and
+reset/bypass, and round-trips rack state. KOD-8 diagnostics include sample rate/block size,
+output metering, latency display, bypass-all, and runtime error surfaces.
+
+KOD-9 is **SOURCE COMPLETE / OWNER RECOVERY VALIDATION PENDING** at the same checkpoint.
+Versioned local session metadata records track technical identity and rack/device state; source
+audio remains an explicit browser-local reselect requirement.
+
+KOD-10 is **SOURCE COMPLETE / OWNER LONG-FORM PERFORMANCE EVIDENCE PENDING**. The host keeps
+waveform reduction, storage, playback, and rack/runtime seams separable, and `npm run perf:kahu`
+reports generated artifact sizes. It does not claim multi-hour source readiness because decoding
+still uses a resident `AudioBuffer`.
+
+KOD-11 is **SOURCE COMPLETE / OWNER FINAL BROWSER VALIDATION PENDING**. The fork now documents
+run/build/test/runtime-check/staging/provenance behavior and exposes permanent focused commands;
+the remaining closure is owner-run browser, audible, recovery, and long-form qualification.
+
 ---
 
 ## 1. Product goal
