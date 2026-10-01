@@ -4,8 +4,15 @@ export type RackDevice = {
     readonly id: string
     readonly trackId: string
     readonly name: string
+    readonly moduleId: string | undefined
+    readonly parameterValues: Record<string, number>
     bypassed: boolean
 }
+
+export type RackSession = Readonly<{
+    version: 1
+    chains: ReadonlyArray<Readonly<{trackId: string, devices: ReadonlyArray<Readonly<RackDevice>>}>>
+}>
 
 export class RackStore {
     private readonly chains = new Map<string, RackDevice[]>()
@@ -20,6 +27,24 @@ export class RackStore {
             id: `rack-${this.nextId.toString().padStart(2, "0")}`,
             trackId,
             name: "Reference effect slot",
+            moduleId: undefined,
+            parameterValues: {},
+            bypassed: false
+        }
+        this.nextId += 1
+        const chain = this.chains.get(trackId) ?? []
+        chain.push(device)
+        this.chains.set(trackId, chain)
+        return device
+    }
+
+    addModule(trackId: string, moduleId: string, name: string, parameterValues: Record<string, number> = {}): RackDevice {
+        const device: RackDevice = {
+            id: `rack-${this.nextId.toString().padStart(2, "0")}`,
+            trackId,
+            name,
+            moduleId,
+            parameterValues: {...parameterValues},
             bypassed: false
         }
         this.nextId += 1
@@ -49,6 +74,13 @@ export class RackStore {
         }
     }
 
+    setParameter(trackId: string, deviceId: string, key: string, value: number): void {
+        const device = this.find(trackId, deviceId)
+        if (device !== undefined) {
+            device.parameterValues[key] = value
+        }
+    }
+
     move(trackId: string, deviceId: string, direction: -1 | 1): void {
         const chain = this.chains.get(trackId)
         const index = chain?.findIndex(device => device.id === deviceId) ?? -1
@@ -64,7 +96,47 @@ export class RackStore {
         this.chains.delete(trackId)
     }
 
+    serialize(): string {
+        const session: RackSession = {
+            version: 1,
+            chains: Array.from(this.chains.entries()).map(([trackId, devices]) => ({trackId, devices}))
+        }
+        return JSON.stringify(session)
+    }
+
+    restore(serialized: string): void {
+        const parsed: unknown = JSON.parse(serialized)
+        if (!isRackSession(parsed)) {
+            throw new Error("Invalid Kahu rack session.")
+        }
+        this.chains.clear()
+        let highestId = 0
+        for (const chain of parsed.chains) {
+            const devices = chain.devices.map(device => ({
+                id: device.id,
+                trackId: chain.trackId,
+                name: device.name,
+                moduleId: device.moduleId,
+                parameterValues: {...device.parameterValues},
+                bypassed: device.bypassed
+            }))
+            this.chains.set(chain.trackId, devices)
+            for (const device of devices) {
+                highestId = Math.max(highestId, Number(device.id.replace("rack-", "")) || 0)
+            }
+        }
+        this.nextId = highestId + 1
+    }
+
     private find(trackId: string, deviceId: string): RackDevice | undefined {
         return this.chains.get(trackId)?.find(device => device.id === deviceId)
     }
+}
+
+const isRackSession = (value: unknown): value is RackSession => {
+    if (typeof value !== "object" || value === null) {
+        return false
+    }
+    const candidate = value as {version?: unknown, chains?: unknown}
+    return candidate.version === 1 && Array.isArray(candidate.chains)
 }

@@ -1,57 +1,83 @@
-// KOD-6 host bridge: loads generated Kahu metadata/WASM and owns AudioWorklet lifecycle only.
+// KOD-7 host bridge: resolves generated Kahu metadata and retains Rust-WASM AudioWorklet devices.
 
-type ManifestParameter = Readonly<{id: number, key: string, default: number}>
-type ManifestModule = Readonly<{
+export type KahuParameterManifest = Readonly<{id: number, key: string, default: number, min: number, max: number, step: number}>
+export type KahuModuleManifest = Readonly<{
     id: string
     name: string
     runtime: Readonly<{registry_index: number, latency_samples: number}>
-    parameters: ReadonlyArray<ManifestParameter>
+    parameters: ReadonlyArray<KahuParameterManifest>
 }>
-type LibraryManifest = Readonly<{modules: ReadonlyArray<ManifestModule>}>
+export type KahuLibraryManifest = Readonly<{modules: ReadonlyArray<KahuModuleManifest>}>
 
 const WASM_URL = "/kahu-runtime/kahu_dsp_wasm.wasm"
 const MANIFEST_URL = "/kahu-runtime/library-manifest.json"
 let workletModule: Promise<void> | undefined
+let assets: Promise<Readonly<{wasmBytes: ArrayBuffer, manifest: KahuLibraryManifest}>> | undefined
 
 const loadWorkletModule = (context: AudioContext): Promise<void> => {
     workletModule ??= context.audioWorklet.addModule("/worklets/kahu-gain-worklet.js")
     return workletModule
 }
 
-export class KahuGainRuntime {
-    private readonly node: AudioWorkletNode
-    private readonly gainParameterId: number
-    private readonly latencySamples: number
-    private ready = false
-    private gainDb = 0
-
-    private constructor(node: AudioWorkletNode, parameterId: number, latencySamples: number) {
-        this.node = node
-        this.gainParameterId = parameterId
-        this.latencySamples = latencySamples
-    }
-
-    static async create(context: AudioContext, channels: number, maxFrames: number): Promise<KahuGainRuntime> {
-        await loadWorkletModule(context)
-        const [wasmResponse, manifestResponse] = await Promise.all([fetch(WASM_URL), fetch(MANIFEST_URL)])
+const loadAssets = (): Promise<Readonly<{wasmBytes: ArrayBuffer, manifest: KahuLibraryManifest}>> => {
+    assets ??= Promise.all([fetch(WASM_URL), fetch(MANIFEST_URL)]).then(async ([wasmResponse, manifestResponse]) => {
         if (!wasmResponse.ok || !manifestResponse.ok) {
             throw new Error("Kahu Rust-WASM runtime assets are unavailable; run the parent build staging step.")
         }
-        const [wasmBytes, rawManifest] = await Promise.all([wasmResponse.arrayBuffer(), manifestResponse.json() as Promise<LibraryManifest>])
-        const module = rawManifest.modules.find(candidate => candidate.id === "utility.gain")
-        const parameter = module?.parameters.find(candidate => candidate.key === "gain_db")
-        if (module === undefined || parameter === undefined) {
-            throw new Error("Generated Kahu manifest does not contain utility.gain/gain_db.")
+        const [wasmBytes, manifest] = await Promise.all([
+            wasmResponse.arrayBuffer(),
+            manifestResponse.json() as Promise<KahuLibraryManifest>
+        ])
+        return {wasmBytes, manifest}
+    })
+    return assets
+}
+
+export class KahuGainRuntime {
+    private readonly node: AudioWorkletNode
+    private readonly latencySamples: number
+    private readonly module: KahuModuleManifest
+    private readonly parameterIds = new Map<string, number>()
+    private readonly parameterValues = new Map<number, number>()
+    private ready = false
+
+    private constructor(node: AudioWorkletNode, module: KahuModuleManifest) {
+        this.node = node
+        this.module = module
+        this.latencySamples = module.runtime.latency_samples
+        for (const parameter of module.parameters) {
+            this.parameterIds.set(parameter.key, parameter.id)
+            this.parameterValues.set(parameter.id, parameter.default)
         }
-        const node = new AudioWorkletNode(context, "kahu-gain", {
+    }
+
+    static async catalog(): Promise<KahuLibraryManifest> {
+        return (await loadAssets()).manifest
+    }
+
+    static async create(
+        context: AudioContext,
+        channels: number,
+        maxFrames: number,
+        moduleId = "utility.gain"
+    ): Promise<KahuGainRuntime> {
+        await loadWorkletModule(context)
+        const {wasmBytes, manifest} = await loadAssets()
+        const module = manifest.modules.find(candidate => candidate.id === moduleId)
+        if (module === undefined) {
+            throw new Error(`Generated Kahu manifest does not contain ${moduleId}.`)
+        }
+        const node = new AudioWorkletNode(context, "kahu-dsp", {
             numberOfInputs: 1,
             numberOfOutputs: 1,
             outputChannelCount: [channels]
         })
-        node.connect(context.destination)
-        const runtime = new KahuGainRuntime(node, parameter.id, module.runtime.latency_samples)
+        const runtime = new KahuGainRuntime(node, module)
         try {
-            await runtime.initialize(wasmBytes, module.runtime.registry_index, context.sampleRate, channels, maxFrames)
+            await runtime.initialize(wasmBytes.slice(0), module.runtime.registry_index, context.sampleRate, channels, maxFrames)
+            for (const parameter of module.parameters) {
+                runtime.setParameter(parameter.key, parameter.default)
+            }
         } catch (error) {
             runtime.dispose()
             throw error
@@ -67,19 +93,49 @@ export class KahuGainRuntime {
         return this.latencySamples
     }
 
-    get gain(): number {
-        return this.gainDb
+    get moduleId(): string {
+        return this.module.id
+    }
+
+    get name(): string {
+        return this.module.name
+    }
+
+    get parameters(): ReadonlyArray<KahuParameterManifest> {
+        return this.module.parameters
+    }
+
+    parameterValue(key: string): number {
+        const parameterId = this.parameterIds.get(key)
+        return parameterId === undefined ? 0 : this.parameterValues.get(parameterId) ?? 0
+    }
+
+    setParameter(key: string, value: number): void {
+        const parameterId = this.parameterIds.get(key)
+        if (parameterId === undefined) {
+            return
+        }
+        this.parameterValues.set(parameterId, value)
+        if (this.ready) {
+            this.node.port.postMessage({type: "parameter", parameterId, value})
+        }
     }
 
     setGainDb(value: number): void {
-        this.gainDb = value
-        if (this.ready) {
-            this.node.port.postMessage({type: "parameter", parameterId: this.gainParameterId, value})
-        }
+        this.setParameter("gain_db", value)
     }
 
     setBypassed(bypassed: boolean): void {
         this.node.port.postMessage({type: "bypass", bypassed})
+    }
+
+    reset(): void {
+        this.node.port.postMessage({type: "reset"})
+    }
+
+    connectOutput(output: AudioNode): void {
+        this.node.disconnect()
+        this.node.connect(output)
     }
 
     dispose(): void {

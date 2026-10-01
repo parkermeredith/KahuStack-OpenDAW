@@ -11,18 +11,24 @@ import {AudioTrackPlayer, decodeAudioFile, DecodedAudioFile} from "./audio-track
 import {computeWaveformPeaks} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {RackStore} from "./rack-store"
-import {KahuGainRuntime} from "./kahu-runtime"
+import {KahuGainRuntime, KahuModuleManifest} from "./kahu-runtime"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
 
 const audioContext = new AudioContext()
+const monitorInput = audioContext.createGain()
+const analyser = audioContext.createAnalyser()
+analyser.fftSize = 256
+monitorInput.connect(analyser)
+analyser.connect(audioContext.destination)
 const transport = new Transport(() => audioContext.currentTime)
 const trackStore = new TrackStore()
 const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
 const kahuRuntimes = new Map<string, KahuGainRuntime>()
 const runtimeErrors = new Map<string, string>()
+let catalogModules: ReadonlyArray<KahuModuleManifest> = []
 let timeReadout: HTMLElement | undefined
 let musicalReadout: HTMLElement | undefined
 let playhead: HTMLElement | undefined
@@ -38,10 +44,16 @@ let fileInput: HTMLInputElement | undefined
 let rackList: HTMLElement | undefined
 let rackTitle: HTMLElement | undefined
 let addRackSlotButton: HTMLButtonElement | undefined
+let modulePicker: HTMLSelectElement | undefined
+let meterFill: HTMLElement | undefined
+let meterReadout: HTMLElement | undefined
+let bypassAllButton: HTMLButtonElement | undefined
+let bypassAll = false
 let animationFrame = 0
 
 const refreshTransport = (): void => {
     const snapshot = transport.snapshot()
+    refreshMeter()
     timeReadout?.replaceChildren(snapshot.timecode)
     musicalReadout?.replaceChildren(snapshot.musicalPosition)
     playButton?.replaceChildren(snapshot.isPlaying ? "Ⅱ" : "▶")
@@ -60,6 +72,18 @@ const refreshTransport = (): void => {
     } else {
         animationFrame = 0
     }
+}
+
+const refreshMeter = (): void => {
+    const samples = new Float32Array(analyser.fftSize)
+    analyser.getFloatTimeDomainData(samples)
+    let peak = 0
+    for (const sample of samples) {
+        peak = Math.max(peak, Math.abs(sample))
+    }
+    const db = peak > 0 ? 20 * Math.log10(peak) : -Infinity
+    meterFill?.style.setProperty("width", `${Math.min(1, peak) * 100}%`)
+    meterReadout?.replaceChildren(Number.isFinite(db) ? `${db.toFixed(1)} dBFS` : "-∞ dBFS")
 }
 
 const restartTransportRefresh = (): void => {
@@ -129,9 +153,11 @@ const updateSelectedTrack = (): void => {
 const removeTrack = (id: string): void => {
     audioPlayers.get(id)?.stop()
     audioPlayers.delete(id)
-    kahuRuntimes.get(id)?.dispose()
-    kahuRuntimes.delete(id)
-    runtimeErrors.delete(id)
+    for (const device of rackStore.devicesFor(id)) {
+        kahuRuntimes.get(device.id)?.dispose()
+        kahuRuntimes.delete(device.id)
+        runtimeErrors.delete(device.id)
+    }
     trackStore.remove(id)
     rackStore.removeTrack(id)
     refreshTrackList()
@@ -225,6 +251,20 @@ const refreshTrackList = (): void => {
     }
 }
 
+const rebuildTrackRack = (trackId: string): void => {
+    const player = audioPlayers.get(trackId)
+    if (player === undefined) {
+        return
+    }
+    const runtimes = rackStore.devicesFor(trackId)
+        .map(device => kahuRuntimes.get(device.id))
+        .filter((runtime): runtime is KahuGainRuntime => runtime !== undefined)
+    for (let index = 0; index < runtimes.length; index++) {
+        runtimes[index].connectOutput(runtimes[index + 1]?.output ?? monitorInput)
+    }
+    player.setOutput(runtimes[0]?.output ?? monitorInput)
+}
+
 const refreshRack = (): void => {
     const root = rackList
     if (root === undefined) {
@@ -251,25 +291,29 @@ const refreshRack = (): void => {
     if (devices.length === 0) {
         const empty = document.createElement("div")
         empty.className = "rack-empty"
-        empty.innerHTML = "<strong>Empty audio-effect chain</strong><span>Add a reference slot to verify rack lifecycle.</span>"
+        const title = document.createElement("strong")
+        title.textContent = "Empty audio-effect chain"
+        const hint = document.createElement("span")
+        hint.textContent = "Choose a generated Kahu module and add it to this track."
+        empty.append(title, hint)
         root.append(empty)
         return
     }
     for (const [index, device] of devices.entries()) {
-        const runtime = kahuRuntimes.get(track.id)
+        const runtime = kahuRuntimes.get(device.id)
         const card = document.createElement("article")
         card.className = `rack-device${device.bypassed ? " bypassed" : ""}`
         const cardHeader = document.createElement("div")
         cardHeader.className = "rack-device-header"
         const name = document.createElement("strong")
-        name.textContent = runtime === undefined ? device.name : "Kahu Gain · utility.gain"
+        name.textContent = runtime === undefined ? device.name : `${runtime.name} · ${runtime.moduleId}`
         const status = document.createElement("small")
         status.textContent = device.bypassed ? "BYPASSED" : runtime === undefined ? "RUNTIME PENDING" : "RUST/WASM ACTIVE"
         cardHeader.append(name, status)
         const body = document.createElement("p")
         body.textContent = runtime === undefined
-            ? runtimeErrors.get(track.id) ?? "Waiting for the staged Kahu runtime"
-            : `utility.gain · ${runtime.latency} sample latency`
+            ? runtimeErrors.get(device.id) ?? "Waiting for the staged Kahu runtime"
+            : `${runtime.moduleId} · ${runtime.latency} sample latency`
         const controls = document.createElement("div")
         controls.className = "rack-device-controls"
         const bypass = document.createElement("button")
@@ -278,7 +322,7 @@ const refreshRack = (): void => {
         bypass.textContent = "BYP"
         bypass.onclick = () => {
             rackStore.setBypassed(track.id, device.id, !device.bypassed)
-            kahuRuntimes.get(track.id)?.setBypassed(!device.bypassed)
+            kahuRuntimes.get(device.id)?.setBypassed(!device.bypassed)
             refreshRack()
         }
         const moveLeft = document.createElement("button")
@@ -288,6 +332,7 @@ const refreshRack = (): void => {
         moveLeft.disabled = index === 0
         moveLeft.onclick = () => {
             rackStore.move(track.id, device.id, -1)
+            rebuildTrackRack(track.id)
             refreshRack()
         }
         const moveRight = document.createElement("button")
@@ -297,6 +342,7 @@ const refreshRack = (): void => {
         moveRight.disabled = index === devices.length - 1
         moveRight.onclick = () => {
             rackStore.move(track.id, device.id, 1)
+            rebuildTrackRack(track.id)
             refreshRack()
         }
         const remove = document.createElement("button")
@@ -304,22 +350,44 @@ const refreshRack = (): void => {
         remove.type = "button"
         remove.textContent = "×"
         remove.onclick = () => {
+            kahuRuntimes.get(device.id)?.dispose()
+            kahuRuntimes.delete(device.id)
+            runtimeErrors.delete(device.id)
             rackStore.remove(track.id, device.id)
+            rebuildTrackRack(track.id)
             refreshRack()
+        }
+        if (runtime !== undefined) {
+            const reset = document.createElement("button")
+            reset.className = "rack-control"
+            reset.type = "button"
+            reset.textContent = "RST"
+            reset.title = "Reset processor"
+            reset.onclick = () => runtime.reset()
+            controls.append(reset)
         }
         controls.append(bypass, moveLeft, moveRight, remove)
         if (runtime !== undefined) {
-            const gain = document.createElement("input")
-            gain.className = "rack-gain"
-            gain.type = "range"
-            gain.min = "-60"
-            gain.max = "24"
-            gain.step = "0.1"
-            gain.value = runtime.gain.toString()
-            gain.title = "Kahu Gain dB"
-            gain.setAttribute("aria-label", "Kahu Gain dB")
-            gain.oninput = () => runtime.setGainDb(Number(gain.value))
-            card.append(cardHeader, body, gain, controls)
+            const parameter = runtime.parameters[0]
+            if (parameter !== undefined) {
+                const parameterControl = document.createElement("input")
+                parameterControl.className = "rack-gain"
+                parameterControl.type = "range"
+                parameterControl.min = parameter.min.toString()
+                parameterControl.max = parameter.max.toString()
+                parameterControl.step = parameter.step.toString()
+                parameterControl.value = runtime.parameterValue(parameter.key).toString()
+                parameterControl.title = parameter.key
+                parameterControl.setAttribute("aria-label", `${runtime.name} ${parameter.key}`)
+                parameterControl.oninput = () => {
+                    const value = Number(parameterControl.value)
+                    runtime.setParameter(parameter.key, value)
+                    rackStore.setParameter(track.id, device.id, parameter.key, value)
+                }
+                card.append(cardHeader, body, parameterControl, controls)
+            } else {
+                card.append(cardHeader, body, controls)
+            }
         } else {
             card.append(cardHeader, body, controls)
         }
@@ -327,24 +395,34 @@ const refreshRack = (): void => {
     }
 }
 
-const initializeRuntime = async (trackId: string): Promise<void> => {
+const initializeRuntime = async (trackId: string, deviceId: string, moduleId: string): Promise<void> => {
     const player = audioPlayers.get(trackId)
     if (player === undefined) {
         return
     }
     engineStatus?.replaceChildren("RUST/WASM ENGINE · LOADING")
     try {
-        const runtime = await KahuGainRuntime.create(audioContext, 2, 128)
-        kahuRuntimes.set(trackId, runtime)
-        player.setOutput(runtime.output)
-        runtimeErrors.delete(trackId)
+        const runtime = await KahuGainRuntime.create(audioContext, 2, 128, moduleId)
+        kahuRuntimes.get(deviceId)?.dispose()
+        kahuRuntimes.set(deviceId, runtime)
+        runtime.setBypassed(bypassAll)
+        rebuildTrackRack(trackId)
+        runtimeErrors.delete(deviceId)
         engineStatus?.replaceChildren("RUST/WASM ENGINE · READY")
         refreshRack()
     } catch (error) {
-        runtimeErrors.set(trackId, error instanceof Error ? error.message : "Kahu runtime initialization failed.")
+        runtimeErrors.set(deviceId, error instanceof Error ? error.message : "Kahu runtime initialization failed.")
         engineStatus?.replaceChildren("RUST/WASM ENGINE · UNAVAILABLE")
         refreshRack()
     }
+}
+
+const toggleBypassAll = (): void => {
+    bypassAll = !bypassAll
+    for (const runtime of kahuRuntimes.values()) {
+        runtime.setBypassed(bypassAll)
+    }
+    bypassAllButton?.replaceChildren(bypassAll ? "BYPASS OFF" : "BYPASS ALL")
 }
 
 const handleAudioEnded = (): void => {
@@ -384,12 +462,13 @@ const loadAudio = async (file: File): Promise<void> => {
         const state = trackStore.add(track)
         const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
         player.load(track.buffer)
+        player.setOutput(monitorInput)
         audioPlayers.set(state.id, player)
-        rackStore.addReferenceSlot(state.id)
+        const device = rackStore.addModule(state.id, "utility.gain", "Gain", {gain_db: 0})
         refreshTrackList()
         updateSelectedTrack()
         refreshTrackDuration()
-        void initializeRuntime(state.id)
+        void initializeRuntime(state.id, device.id, device.moduleId ?? "utility.gain")
         if (wasPlaying) {
             playAllPlayers()
         }
@@ -410,6 +489,23 @@ const toggleTransport = async (): Promise<void> => {
         playAllPlayers()
     }
     restartTransportRefresh()
+}
+
+const loadCatalog = async (): Promise<void> => {
+    try {
+        catalogModules = (await KahuGainRuntime.catalog()).modules
+        if (modulePicker !== undefined) {
+            modulePicker.replaceChildren()
+            for (const module of catalogModules) {
+                const option = document.createElement("option")
+                option.value = module.id
+                option.textContent = `${module.name} · ${module.id}`
+                modulePicker.append(option)
+            }
+        }
+    } catch {
+        catalogModules = []
+    }
 }
 
 replaceChildren(document.body, (
@@ -544,13 +640,24 @@ replaceChildren(document.body, (
                     <h2 onInit={element => rackTitle = element}>Kahu Rack</h2>
                 </div>
                 <span className="rack-note">Audio effects only · reference lifecycle</span>
+                <select className="module-picker" aria-label="Choose Kahu module" onInit={element => modulePicker = element}>
+                    <option value="utility.gain">Gain</option>
+                </select>
+                <button className="rack-bypass-button" type="button" onInit={element => {
+                    bypassAllButton = element
+                    element.onclick = toggleBypassAll
+                }}>BYPASS ALL</button>
                 <button className="rack-add-button" type="button" onInit={element => {
                     addRackSlotButton = element
                     element.onclick = () => {
                         const track = trackStore.selected()
-                        if (track !== undefined) {
-                            rackStore.addReferenceSlot(track.id)
+                        const moduleId = modulePicker?.value ?? "utility.gain"
+                        const module = catalogModules.find(candidate => candidate.id === moduleId)
+                        if (track !== undefined && module !== undefined) {
+                            const defaults = Object.fromEntries(module.parameters.map(parameter => [parameter.key, parameter.default]))
+                            const device = rackStore.addModule(track.id, module.id, module.name, defaults)
                             refreshRack()
+                            void initializeRuntime(track.id, device.id, module.id)
                         }
                     }
                 }}>ADD SLOT</button>
@@ -559,7 +666,11 @@ replaceChildren(document.body, (
         </section>
         <footer className="testbed-footer">
             <span>kahustack-dsp</span>
-            <span>Source-only UI shell</span>
+            <span className="runtime-info">{`${audioContext.sampleRate} Hz · 128 frame blocks`}</span>
+            <span className="output-meter" aria-label="Output meter">
+                <span className="meter-fill" onInit={element => meterFill = element}/>
+            </span>
+            <span onInit={element => meterReadout = element}>-∞ dBFS</span>
         </footer>
     </main>
 ))
@@ -568,3 +679,4 @@ refreshTrackList()
 updateSelectedTrack()
 refreshRack()
 refreshTransport()
+void loadCatalog()

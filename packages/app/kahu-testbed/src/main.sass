@@ -472,6 +472,27 @@ button:disabled
     opacity: 0.45
     cursor: default
 
+.rack-bypass-button
+  margin-left: 0.75rem
+  padding: 0.35rem 0.5rem
+  color: var(--color-orange)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.6rem
+
+.module-picker
+  max-width: 13rem
+  margin-left: 0.75rem
+  padding: 0.3rem 0.4rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  font: inherit
+  font-size: 0.6rem
+
 .rack-chain
   display: flex
   align-items: stretch
@@ -572,9 +593,29 @@ button:disabled
 
 .testbed-footer
   display: flex
+  align-items: center
+  gap: 0.75rem
   justify-content: space-between
   padding: 0.25rem 0.6rem
   background: var(--color-footer-background)
+
+.runtime-info
+  margin-left: auto
+
+.output-meter
+  display: block
+  width: 5rem
+  height: 0.35rem
+  overflow: hidden
+  background: rgba(black, 0.35)
+  border: 1px solid rgba(white, 0.08)
+
+.meter-fill
+  display: block
+  width: 0
+  height: 100%
+  background: var(--color-green)
+  transition: width 80ms linear
 
 @media (max-width: 900px)
   .workspace

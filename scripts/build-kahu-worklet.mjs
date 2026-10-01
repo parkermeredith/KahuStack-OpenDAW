@@ -22,7 +22,7 @@ const transpiled = ts.transpileModule(source, {
     reportDiagnostics: false
 }).outputText
 const executable = transpiled.replace(/\nexport \{\};\s*$/, "\n")
-assert.match(executable, /registerProcessor\("kahu-gain", KahuGainProcessor\)/)
+assert.match(executable, /registerProcessor\("kahu-dsp", KahuDspProcessor\)/)
 assert.doesNotMatch(executable, /^\s*(?:import|export)\s/m)
 await mkdir(dirname(outputPath), {recursive: true})
 await writeFile(outputPath, `// GENERATED from ${sourcePath}. DO NOT EDIT.\n${executable}`)

@@ -1,4 +1,4 @@
-// KOD-6 realtime boundary: copies AudioWorklet quanta through the canonical Rust-WASM ABI.
+// KOD-7 realtime boundary: copies AudioWorklet quanta through the canonical Rust-WASM ABI.
 
 declare function registerProcessor(
     name: string,
@@ -38,7 +38,7 @@ type WorkletMessage = InitMessage | {
     readonly type: "destroy"
 }
 
-class KahuGainProcessor extends AudioWorkletProcessor {
+class KahuDspProcessor extends AudioWorkletProcessor {
     private wasm: WasmExports | undefined
     private handle = 0
     private inputPointer = 0
@@ -179,4 +179,4 @@ class KahuGainProcessor extends AudioWorkletProcessor {
     }
 }
 
-registerProcessor("kahu-gain", KahuGainProcessor)
+registerProcessor("kahu-dsp", KahuDspProcessor)
