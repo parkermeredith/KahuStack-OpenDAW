@@ -332,6 +332,70 @@ button:disabled
   grid-template-columns: 7rem minmax(0, 1fr)
   min-height: 4rem
 
+.timeline-scroll
+  position: relative
+  flex: 1 1 auto
+  min-height: 3rem
+  overflow-x: auto
+  overflow-y: hidden
+
+.timeline-content
+  position: relative
+  min-width: 100%
+  min-height: 100%
+
+.timeline-lane-list
+  display: flex
+  flex-direction: column
+  min-height: 100%
+
+.timeline-track-lane
+  display: grid
+  grid-template-columns: 7rem minmax(0, 1fr)
+  min-height: 2.65rem
+  border-top: 1px solid rgba(white, 0.04)
+
+  &.selected
+    .timeline-track-label
+      color: var(--color-bright)
+
+.timeline-track-label
+  padding: 0.6rem 0.55rem
+  overflow: hidden
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border-right: 1px solid rgba(white, 0.06)
+  font-size: 0.58rem
+  text-overflow: ellipsis
+  white-space: nowrap
+
+.timeline-track-area
+  position: relative
+  overflow: hidden
+  background-image: linear-gradient(90deg, rgba(white, 0.04) 1px, transparent 1px)
+  background-size: 5rem 100%
+
+.timeline-region
+  position: absolute
+  top: 0.45rem
+  bottom: 0.45rem
+  min-width: 2rem
+  overflow: hidden
+  padding: 0.25rem 0.4rem
+  color: var(--color-bright)
+  background: color-mix(in srgb, var(--color-green), transparent 65%)
+  border: 1px solid var(--color-green)
+  border-radius: 0.15rem
+  cursor: pointer
+  font: inherit
+  font-size: 0.55rem
+  text-align: left
+  text-overflow: ellipsis
+  white-space: nowrap
+
+  &:hover
+    background: color-mix(in srgb, var(--color-green), transparent 48%)
+
 .lane-label
   padding: 0.75rem 0.55rem
   color: var(--color-gray)

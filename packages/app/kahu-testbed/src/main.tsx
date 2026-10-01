@@ -11,6 +11,7 @@ import {AudioTrackPlayer, decodeAudioFile} from "./audio-track"
 import {buildWaveformPyramidAsync, extractVisibleWaveformPeaks, WaveformPyramid} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
+import {TimelineViewport} from "./timeline"
 import {RackStore} from "./rack-store"
 import {KahuGainRuntime, KahuModuleManifest, KahuParameterManifest} from "./kahu-runtime"
 import {
@@ -32,6 +33,7 @@ analyser.fftSize = 256
 monitorInput.connect(analyser)
 analyser.connect(audioContext.destination)
 const transport = new Transport(() => audioContext.currentTime)
+const timelineViewport = new TimelineViewport()
 const trackStore = new TrackStore()
 const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
@@ -47,6 +49,9 @@ let seekInput: HTMLInputElement | undefined
 let positionInput: HTMLInputElement | undefined
 let timelineStartInput: HTMLInputElement | undefined
 let sourceOffsetInput: HTMLInputElement | undefined
+let timelineLaneList: HTMLElement | undefined
+let timelineScroll: HTMLElement | undefined
+let timelineContent: HTMLElement | undefined
 let playButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
@@ -104,7 +109,7 @@ const refreshTransport = (): void => {
     musicalReadout?.replaceChildren(snapshot.musicalPosition)
     playButton?.replaceChildren(snapshot.isPlaying ? "Ⅱ" : "▶")
     playButton?.setAttribute("aria-label", snapshot.isPlaying ? "Pause" : "Play")
-    playhead?.style.setProperty("left", `${snapshot.positionSeconds / snapshot.durationSeconds * 100}%`)
+    playhead?.style.setProperty("left", `${timelineViewport.positionPercent(snapshot.positionSeconds)}%`)
     if (seekInput !== undefined) {
         seekInput.value = snapshot.positionSeconds.toString()
         seekInput.max = snapshot.durationSeconds.toString()
@@ -210,7 +215,9 @@ const refreshTrackPlayers = (): void => {
 
 const refreshTrackDuration = (): void => {
     const duration = trackStore.durationSeconds()
+    timelineViewport.setDuration(duration > 0 ? duration : DEFAULT_TRANSPORT_DURATION_SECONDS)
     transport.setDuration(duration > 0 ? duration : DEFAULT_TRANSPORT_DURATION_SECONDS)
+    refreshTimelineLanes()
     restartTransportRefresh()
 }
 
@@ -236,6 +243,39 @@ const updateSelectedTrack = (): void => {
     audioStatus?.replaceChildren("Audio ready — press Play")
     waveformCanvas?.classList.remove("hidden")
     ensureWaveformPyramid(track)
+    refreshTimelineLanes()
+}
+
+const refreshTimelineLanes = (): void => {
+    const root = timelineLaneList
+    if (root === undefined) return
+    root.replaceChildren()
+    for (const track of trackStore.all()) {
+        const row = document.createElement("div")
+        row.className = `timeline-track-lane${trackStore.selected() === track ? " selected" : ""}`
+        const label = document.createElement("span")
+        label.className = "timeline-track-label"
+        label.textContent = track.name
+        const area = document.createElement("div")
+        area.className = "timeline-track-area"
+        const region = document.createElement("button")
+        region.type = "button"
+        region.className = "timeline-region"
+        const style = timelineViewport.regionStyle(track.region.timelineStartSeconds, track.region.durationSeconds)
+        region.style.left = `${style.leftPercent}%`
+        region.style.width = `${style.widthPercent}%`
+        region.textContent = `${track.name} · ${track.audio.durationSeconds.toFixed(1)} s`
+        region.onclick = event => {
+            event.stopPropagation()
+            trackStore.select(track.id)
+            refreshTrackList()
+            updateSelectedTrack()
+            refreshRack()
+        }
+        area.append(region)
+        row.append(label, area)
+        root.append(row)
+    }
 }
 
 const removeTrack = (id: string): void => {
@@ -769,13 +809,27 @@ replaceChildren(document.body, (
                         <input type="range" min="1" max="4" step="0.25" value="1" aria-label="Timeline zoom"
                                onInit={element => element.oninput = () => {
                                    waveformZoom = Number(element.value)
+                                   timelineViewport.setZoom(waveformZoom)
+                                   if (timelineContent !== undefined) {
+                                       timelineContent.style.width = `${timelineViewport.contentWidthPercent()}%`
+                                   }
+                                   if (timelineViewport.snapshot().zoom === 1 && timelineScroll !== undefined) {
+                                       timelineScroll.scrollLeft = 0
+                                   }
+                                   refreshTimelineLanes()
                                    const track = trackStore.selected()
                                    if (track !== undefined) drawWaveform(track)
                                }}/>
                     </label>
                     <span className="timeline-note">Audio track · Web Audio runtime</span>
                 </div>
-                <div className="timeline-canvas">
+                <div className="timeline-canvas" onInit={element => {
+                    element.onclick = event => {
+                        if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return
+                        const bounds = element.getBoundingClientRect()
+                        seekFromInput(timelineViewport.secondsAtX(event.clientX - bounds.left, bounds.width).toString())
+                    }
+                }}>
                     <div className="ruler" aria-hidden="true">
                         <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
                     </div>
@@ -817,6 +871,21 @@ replaceChildren(document.body, (
                                         aria-label="Source audio waveform"
                                         onInit={element => waveformCanvas = element}/>
                             </div>
+                        </div>
+                    </div>
+                    <div className="timeline-scroll" onInit={element => {
+                        timelineScroll = element
+                        element.onscroll = () => {
+                            const maximum = element.scrollWidth - element.clientWidth
+                            timelineViewport.setScrollFraction(maximum > 0 ? element.scrollLeft / maximum : 0)
+                            refreshTransport()
+                        }
+                    }}>
+                        <div className="timeline-content" onInit={element => {
+                            timelineContent = element
+                            element.style.width = `${timelineViewport.contentWidthPercent()}%`
+                        }}>
+                            <div className="timeline-lane-list" onInit={element => timelineLaneList = element}/>
                         </div>
                     </div>
                     <div className="playhead" aria-hidden="true" onInit={element => playhead = element}/>
@@ -874,5 +943,6 @@ replaceChildren(document.body, (
 refreshTrackList()
 updateSelectedTrack()
 refreshRack()
+refreshTimelineLanes()
 refreshTransport()
 void loadCatalog()
