@@ -16,9 +16,9 @@ It is subordinate to the KahuStack DSP repository authorities for DSP semantics,
 
 ## Current implementation status
 
-KOD-0 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at fork commit
-`e6540064c0253e44910346d7faaf3d74e36c28c2` with parent integration commit
-`efef42e5816ff773f95adfa9f3817151157239fe`. Node 24, Rust 1.95 MSVC, nightly Rust and
+KOD-0 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING**. The synchronized fork
+baseline was `e6540064c0253e44910346d7faaf3d74e36c28c2`; the KOD-0 bootstrap commit is
+`8186da17b5769f073b43eadc1f4747adf9b2ceec`. Node 24, Rust 1.95 MSVC, nightly Rust and
 `wasm32-unknown-unknown` are installed. The full Studio build passes on Windows through
 `npm run build -- --filter=@opendaw/app-studio`, including the Rust engine and device WASM
 artifacts. Studio serves successfully at `https://localhost:8080/` with the required
