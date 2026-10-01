@@ -24,6 +24,12 @@ baseline was `e6540064c0253e44910346d7faaf3d74e36c28c2`; the KOD-0 bootstrap com
 artifacts. Studio serves successfully at `https://localhost:8080/` with the required
 cross-origin-isolation headers; visual/browser/audio-device qualification remains owner-run.
 
+KOD-1 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`0e1e25a3f`. The separate `@kahustack/opendaw-testbed` Vite app has independent
+`dev:kahu`, `build:kahu`, and `test:kahu` commands, openDAW-family colors/fonts/base styling,
+and the minimal header, timeline, track list, and rack shell. Its focused test, lint, build,
+and local HTTP launch checks pass; visual cross-browser qualification remains owner-run.
+
 ---
 
 ## 1. Product goal
