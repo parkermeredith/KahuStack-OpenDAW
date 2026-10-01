@@ -438,8 +438,12 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
         const runtime = await KahuGainRuntime.create(audioContext, 2, 128, moduleId)
         kahuRuntimes.get(deviceId)?.dispose()
         kahuRuntimes.set(deviceId, runtime)
-        runtime.setBypassed(bypassAll)
         rebuildTrackRack(trackId)
+        const device = rackStore.devicesFor(trackId).find(candidate => candidate.id === deviceId)
+        for (const parameter of runtime.parameters) {
+            runtime.setParameter(parameter.key, device?.parameterValues[parameter.key] ?? parameter.default)
+        }
+        runtime.setBypassed(bypassAll || (device?.bypassed ?? false))
         runtimeErrors.delete(deviceId)
         engineStatus?.replaceChildren("RUST/WASM ENGINE · READY")
         refreshRack()
