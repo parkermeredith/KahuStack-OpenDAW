@@ -41,6 +41,12 @@ drag/drop loading, source metadata, bounded waveform peak rendering, horizontal 
 Web Audio source scheduling on the shared transport. Focused tests, lint, and production build
 pass; the first real audio-file/browser qualification remains owner-run.
 
+KOD-4 is **SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING** at child commit
+`b24ddfc1d`. The testbed now supports multiple stable-ID audio tracks, selected-track
+waveform focus, create/remove through the shared loader, mute, solo, per-track gain, and
+shared transport playback. Focused tests, lint, and production build pass; owner validation
+still needs multiple-file playback and audible mute/solo/gain checks.
+
 ---
 
 ## 1. Product goal
