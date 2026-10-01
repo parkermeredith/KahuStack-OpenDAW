@@ -1,0 +1,289 @@
+@font-face
+  font-family: Rubik
+  font-weight: 300
+  font-style: normal
+  font-display: swap
+  src: url("/fonts/rubik-300.woff2") format("woff2")
+
+@font-face
+  font-family: Rubik
+  font-weight: 400
+  font-style: normal
+  font-display: swap
+  src: url("/fonts/rubik-400.woff2") format("woff2")
+
+html, body
+  width: 100%
+  height: 100%
+  margin: 0
+  overflow: hidden
+  color: var(--color-bright)
+  background: var(--color-background)
+  font-family: Rubik, sans-serif
+  font-size: 14px
+  font-weight: 300
+  font-variant-numeric: tabular-nums
+  text-rendering: optimizeLegibility
+
+*, *::before, *::after
+  box-sizing: border-box
+  user-select: none
+
+button
+  font: inherit
+
+button:disabled
+  cursor: default
+
+.testbed-shell
+  display: flex
+  flex-direction: column
+  width: 100%
+  height: 100%
+  min-width: 720px
+  background: var(--color-background)
+
+.testbed-header
+  display: flex
+  align-items: center
+  gap: 0.75rem
+  min-height: 3rem
+  padding: 0.35rem 0.6rem
+  background: var(--color-header-background)
+  border-bottom: 1px solid rgba(white, 0.06)
+
+.brand-lockup
+  display: flex
+  align-items: center
+  gap: 0.55rem
+
+  h1
+    margin: 0
+    font-size: 0.8rem
+    font-weight: 400
+
+  p
+    margin: 0.15rem 0 0
+    color: var(--color-gray)
+    font-size: 0.62rem
+
+.brand-mark
+  display: grid
+  place-items: center
+  width: 1.7rem
+  height: 1.7rem
+  color: var(--color-background)
+  background: var(--color-green)
+  border-radius: 0.2rem
+  font-size: 1rem
+  font-weight: 400
+
+.header-divider
+  width: 1px
+  height: 1.5rem
+  background: rgba(white, 0.08)
+
+.phase-label, .engine-status, .timeline-note, .rack-note, .testbed-footer
+  color: var(--color-gray)
+  font-size: 0.65rem
+  letter-spacing: 0.03em
+
+.header-spacer, .toolbar-spacer
+  flex: 1 1 auto
+
+.engine-status
+  color: var(--color-green)
+
+.header-button, .icon-button, .transport-button
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.2rem
+
+.header-button
+  padding: 0.35rem 0.55rem
+  font-size: 0.62rem
+
+.workspace
+  display: grid
+  grid-template-columns: 14rem minmax(0, 1fr)
+  flex: 1 1 auto
+  min-height: 0
+
+.track-panel, .timeline-panel, .rack-panel
+  background: var(--color-panel-background)
+
+.track-panel
+  border-right: 1px solid rgba(white, 0.06)
+
+.panel-heading, .timeline-toolbar, .rack-heading
+  display: flex
+  align-items: center
+  min-height: 2.4rem
+  padding: 0.35rem 0.55rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border-bottom: 1px solid rgba(white, 0.06)
+  font-size: 0.65rem
+  letter-spacing: 0.04em
+
+.icon-button
+  width: 1.4rem
+  height: 1.4rem
+  margin-left: auto
+  padding: 0
+  font-size: 1rem
+
+.track-row
+  display: flex
+  align-items: center
+  gap: 0.55rem
+  min-height: 3.5rem
+  padding: 0.5rem 0.65rem
+  border-bottom: 1px solid rgba(white, 0.05)
+
+  &.selected
+    background: linear-gradient(90deg, rgba(white, 0.06), transparent)
+
+  strong, small
+    display: block
+
+  strong
+    font-size: 0.75rem
+    font-weight: 400
+
+  small
+    margin-top: 0.2rem
+    color: var(--color-gray)
+    font-size: 0.62rem
+
+.track-color
+  width: 0.25rem
+  height: 2rem
+  background: var(--color-green)
+  border-radius: 0.2rem
+
+.track-empty
+  padding: 1rem 0.65rem
+  color: var(--color-gray)
+  font-size: 0.68rem
+  line-height: 1.5
+
+.timeline-panel
+  display: flex
+  flex-direction: column
+  min-width: 0
+
+.transport-button
+  width: 1.6rem
+  height: 1.6rem
+  margin-right: 0.55rem
+  color: var(--color-green)
+  font-size: 0.65rem
+
+.time-readout
+  color: var(--color-bright)
+  font-size: 0.78rem
+
+.timeline-canvas
+  position: relative
+  flex: 1 1 auto
+  min-height: 0
+  overflow: hidden
+  background-color: var(--color-background)
+  background-image: linear-gradient(rgba(white, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(white, 0.035) 1px, transparent 1px)
+  background-size: 100% 3.2rem, 5rem 100%
+
+.ruler
+  display: grid
+  grid-template-columns: repeat(8, 5rem)
+  height: 2rem
+  padding-left: 1rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border-bottom: 1px solid rgba(white, 0.06)
+
+  span
+    padding: 0.5rem 0.35rem
+    border-left: 1px solid rgba(white, 0.08)
+    font-size: 0.62rem
+
+.lane-grid
+  display: grid
+  grid-template-columns: 7rem minmax(0, 1fr)
+  min-height: 4rem
+
+.lane-label
+  padding: 0.75rem 0.55rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border-right: 1px solid rgba(white, 0.06)
+  font-size: 0.6rem
+
+.lane-track
+  padding: 0.65rem
+
+.empty-clip
+  max-width: 24rem
+  padding: 0.65rem 0.8rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-bright)
+  border-left: 2px solid var(--color-green)
+  font-size: 0.68rem
+
+.rack-panel
+  flex: 0 0 11rem
+  border-top: 1px solid rgba(white, 0.06)
+
+.rack-heading
+  min-height: 3.3rem
+
+  h2
+    margin: 0.15rem 0 0
+    color: var(--color-bright)
+    font-size: 0.85rem
+    font-weight: 400
+
+.eyebrow
+  color: var(--color-green)
+  font-size: 0.58rem
+  letter-spacing: 0.08em
+
+.rack-note
+  margin-left: auto
+
+.rack-empty
+  display: flex
+  align-items: center
+  gap: 0.8rem
+  height: calc(100% - 3.3rem)
+  padding: 0.9rem 1.2rem
+  color: var(--color-gray)
+
+  strong
+    display: block
+    color: var(--color-bright)
+    font-size: 0.75rem
+    font-weight: 400
+
+  p
+    margin: 0.35rem 0 0
+    font-size: 0.68rem
+
+.rack-empty-mark
+  color: var(--color-green)
+  font-size: 1.8rem
+  font-weight: 300
+
+.testbed-footer
+  display: flex
+  justify-content: space-between
+  padding: 0.25rem 0.6rem
+  background: var(--color-footer-background)
+
+@media (max-width: 900px)
+  .workspace
+    grid-template-columns: 11rem minmax(0, 1fr)
+
+  .timeline-note, .rack-note
+    display: none
