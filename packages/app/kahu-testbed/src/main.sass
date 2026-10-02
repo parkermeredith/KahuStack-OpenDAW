@@ -118,6 +118,11 @@ button:disabled
   background: var(--color-panel-background)
 
 .track-panel
+  display: flex
+  flex-direction: column
+  min-height: 0
+
+.track-panel
   border-right: 1px solid rgba(white, 0.06)
 
 .panel-heading, .timeline-toolbar, .rack-heading
@@ -142,7 +147,8 @@ button:disabled
   display: flex
   align-items: center
   gap: 0.55rem
-  min-height: 3.5rem
+  height: 3.5rem
+  flex: 0 0 3.5rem
   padding: 0.5rem 0.65rem
   border-bottom: 1px solid rgba(white, 0.05)
 
@@ -210,6 +216,21 @@ button:disabled
   font-size: 0.68rem
   line-height: 1.5
 
+.track-list
+  flex: 1 1 auto
+  min-height: 0
+  overflow-y: auto
+  overscroll-behavior: contain
+
+.track-header-spacer
+  height: 8.3rem
+  flex: 0 0 8.3rem
+  border-bottom: 1px solid rgba(white, 0.04)
+
+.track-header-bottom-spacer
+  height: 1rem
+  flex: 0 0 1rem
+
 .timeline-panel
   display: flex
   flex-direction: column
@@ -225,6 +246,28 @@ button:disabled
 .transport-controls
   display: flex
   align-items: center
+
+.transport-options
+  display: flex
+  align-items: center
+
+.transport-toggle-button
+  min-width: 2.8rem
+  height: 1.6rem
+  margin-left: 0.25rem
+  padding: 0 0.3rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.52rem
+  letter-spacing: 0.03em
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
 
 .transport-button, .stop-button
   display: grid
@@ -287,7 +330,7 @@ button:disabled
     border-radius: 0.15rem
     font-size: 0.55rem
 
-.transport-button:hover, .stop-button:hover
+.transport-button:hover, .stop-button:hover, .transport-toggle-button:hover
   color: var(--color-bright)
   border-color: var(--color-green)
 
@@ -301,8 +344,7 @@ button:disabled
   background-size: 100% 3.2rem, 5rem 100%
 
 .lane-grid
-  display: grid
-  grid-template-columns: 7rem minmax(0, 1fr)
+  display: block
   min-height: 4rem
 
 .timeline-scroll
@@ -310,7 +352,8 @@ button:disabled
   flex: 1 1 auto
   min-height: 3rem
   overflow-x: hidden
-  overflow-y: hidden
+  overflow-y: auto
+  overscroll-behavior: contain
 
 .timeline-content
   position: relative
@@ -324,27 +367,16 @@ button:disabled
   min-height: 100%
 
 .timeline-track-lane
-  display: grid
-  grid-template-columns: 7rem minmax(0, 1fr)
-  min-height: 2.65rem
+  display: block
+  height: 3.5rem
+  min-height: 3.5rem
   border-top: 1px solid rgba(white, 0.04)
 
   &.selected
-    .timeline-track-label
-      color: var(--color-bright)
-
-.timeline-track-label
-  padding: 0.6rem 0.55rem
-  overflow: hidden
-  color: var(--color-gray)
-  background: var(--color-panel-background)
-  border-right: 1px solid rgba(white, 0.06)
-  font-size: 0.58rem
-  text-overflow: ellipsis
-  white-space: nowrap
-
 .timeline-track-area
   position: relative
+  width: 100%
+  height: 100%
   overflow: hidden
   background-image: linear-gradient(90deg, rgba(white, 0.04) 1px, transparent 1px)
   background-size: 5rem 100%
@@ -369,13 +401,6 @@ button:disabled
 
   &:hover
     background: color-mix(in srgb, var(--color-green), transparent 48%)
-
-.lane-label
-  padding: 0.75rem 0.55rem
-  color: var(--color-gray)
-  background: var(--color-panel-background)
-  border-right: 1px solid rgba(white, 0.06)
-  font-size: 0.6rem
 
 .lane-track
   padding: 0.65rem

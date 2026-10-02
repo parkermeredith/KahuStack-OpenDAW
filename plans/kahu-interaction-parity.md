@@ -1,6 +1,6 @@
 # Kahu Interaction Parity — OpenDAW Timeline and Control Convergence Plan
 
-Status: **KUI-4 SOURCE COMPLETE / KUI-5 IMPLEMENTATION IN PROGRESS**  
+Status: **KUI-8 SOURCE COMPLETE / KUI-9 IMPLEMENTATION IN PROGRESS**
 Program: **KUI — Kahu UI Interaction Parity**  
 Date: 2026-10-01  
 Repository: `parkermeredith/KahuStack-OpenDAW`  
@@ -74,8 +74,8 @@ KUI-1 implementation evidence: `TimelineController` owns one published `Timeline
 in seconds with a 0.05-second minimum. Kahu region, playhead, seek, and selected-waveform geometry
 now consume that range; the enlarged DOM strip and native horizontal scrollbar are no longer the
 viewport authority. The old `TimelineViewport` source and test were removed after the new focused
-range tests passed. Legacy `zoom`/`scrollFraction` conversion is retained only at the existing
-session boundary until KUI-7 performs the versioned normalized-range migration.
+range tests passed. Legacy `zoom`/`scrollFraction` conversion is retained only in the versioned
+session migration boundary.
 
 KUI-2 implementation evidence: the child now carries the openDAW `WheelScaling` calibration and
 `WheelScroll` routing in `src/timeline/`. The Studio preference dependency is replaced only by the
@@ -90,6 +90,20 @@ pointer scrubbing, resize-driven repaint, and shared wheel navigation. The raw z
 The reduced openDAW range navigator provides left/right handles, center panning, outside-click
 recentering, double-click show-all, normalized clamping, and finite zero-width behavior. Focused
 time-axis and range-slider tests pass; browser pointer qualification remains owner pending.
+
+KUI-5/KUI-6 implementation evidence: visible waveform extraction now projects the shared range into
+the region's source-sample interval, including source offsets and partial region overlap. Region,
+playhead, ruler, and waveform geometry use the same `TimelineRange` coordinates. Fixed track and lane
+viewports share one bounded vertical scroll model, with duplicate moving track labels removed. The
+alignment matrix and scroll synchronization tests pass; browser geometry qualification remains owner pending.
+
+KUI-7/KUI-8 implementation evidence: region body dragging preserves source offset, clamps timeline
+start at zero, supports edge paging, and restores on cancellation. Session state now stores normalized
+range bounds in v4 together with loop/follow state; v1/v2/v3 inputs migrate to the v4 boundary while
+retaining the exact v2 normalized-range conversion. Transport loop crossing reschedules every player
+from one shared sample-clock epoch, follow pages by one visible range, and Space/Period/arrows/Shift+L/
+Shift+F are wired outside editable controls. Focused source tests, typecheck, lint, and build pass;
+owner browser qualification remains pending.
 
 ---
 
@@ -1002,7 +1016,9 @@ Add region body drag.
 
 Keep numeric timing fields only for precise entry.
 
-Upgrade session viewport format from KBW v2 `zoom + scrollFraction` to normalized range state:
+Upgrade session viewport format from KBW v2 `zoom + scrollFraction` to normalized range state. KUI-8
+extends the normalized schema with transport state, so the canonical persisted version is v4 while
+v3 remains a migration input:
 
 ```ts
 viewport: {
@@ -1023,7 +1039,9 @@ max = min + length
 
 Clamp migrated min/max to `[0, 1]` and ensure `max > min`.
 
-This normalized representation restores before local source audio is reselected.
+This normalized representation restores before local source audio is reselected. Loop and follow state
+restore at the same boundary; loop bounds are clamped again when the recovered source duration becomes
+known.
 
 Required tests:
 
@@ -1033,8 +1051,9 @@ Required tests:
 - cancel drag restores original;
 - source offset unchanged;
 - auto-scroll changes range during edge drag;
-- session v2 -> v3 migration;
-- v3 round trip.
+- session v2 -> v4 migration;
+- session v3 -> v4 migration;
+- v4 round trip including loop/follow state.
 
 Commit:
 
@@ -1185,12 +1204,11 @@ Use this table during implementation and update statuses only with evidence.
 | KUI-2 | SOURCE COMPLETE / OWNER VALIDATION PENDING | openDAW wheel/trackpad interaction ported and tested. |
 | KUI-3 | SOURCE COMPLETE / OWNER VALIDATION PENDING | dynamic time axis + ruler scrub replace static ruler/seek slider. |
 | KUI-4 | SOURCE COMPLETE / OWNER VALIDATION PENDING | openDAW range navigator replaces zoom slider/native range navigation. |
-| KUI-5 | IMPLEMENTATION IN PROGRESS | waveform, regions, ruler and playhead share exact range mapping. |
-| KUI-5 | PLANNED | waveform, regions, ruler and playhead share exact range mapping. |
-| KUI-6 | PLANNED | fixed headers and horizontally navigable lanes are cleanly separated. |
-| KUI-7 | PLANNED | region drag + session range migration complete. |
-| KUI-8 | PLANNED | transport/loop/follow shortcuts and controls match intended openDAW subset. |
-| KUI-9 | PLANNED | all workbench controls audited and harmonized. |
+| KUI-5 | SOURCE COMPLETE / OWNER VALIDATION PENDING | waveform, regions, ruler and playhead share exact range mapping. |
+| KUI-6 | SOURCE COMPLETE / OWNER VALIDATION PENDING | fixed headers and horizontally navigable lanes are cleanly separated. |
+| KUI-7 | SOURCE COMPLETE / OWNER VALIDATION PENDING | region drag + session range migration complete. |
+| KUI-8 | SOURCE COMPLETE / OWNER VALIDATION PENDING | transport/loop/follow shortcuts and controls match intended openDAW subset. |
+| KUI-9 | IMPLEMENTATION IN PROGRESS | all workbench controls audited and harmonized. |
 | KUI-10 | PLANNED | obsolete substitutes removed; full validation and docs complete. |
 
 ---

@@ -13,10 +13,14 @@ import {AudioTrackPlayer, decodeAudioFile} from "./audio-track"
 import {buildWaveformPyramidAsync, extractVisibleWaveformPeaks, WaveformPyramid} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
-import {TimelineController} from "./timeline/timeline-controller"
+import {TimelineController, TimelineFollowController} from "./timeline/timeline-controller"
 import {attachWheelScroll} from "./timeline/wheel-scroll"
 import {createTimelineNavigation} from "./timeline/timeline-navigation"
 import {createTimelineRangeSlider} from "./timeline/timeline-range-slider"
+import {projectRegionPixels, projectVisibleWaveform} from "./timeline/visible-waveform"
+import {TrackScrollModel} from "./timeline/track-scroll"
+import {moveRangeForEdgePointer, RegionDragSession} from "./timeline/region-drag"
+import {dispatchTransportShortcut} from "./timeline/transport-shortcuts"
 import {RackStore} from "./rack-store"
 import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime, type KahuAnalysisTelemetry} from "./kahu-runtime"
 import {
@@ -26,7 +30,7 @@ import {
     formatParameterValue,
     parameterValueToControlValue,
 } from "./parameter-editor"
-import {createSession, decodeSession, encodeSession, SESSION_STORAGE_KEY, type TestbedSession} from "./session-store"
+import {createSession, decodeSession, encodeSession, LEGACY_SESSION_STORAGE_KEY, LEGACY_SESSION_V3_STORAGE_KEY, SESSION_STORAGE_KEY, type TestbedSession} from "./session-store"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
@@ -47,6 +51,7 @@ outputTrim.connect(analyser)
 analyser.connect(audioContext.destination)
 const transport = new Transport(() => audioContext.currentTime)
 const timelineController = new TimelineController()
+const followController = new TimelineFollowController(timelineController.range)
 const trackStore = new TrackStore()
 const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
@@ -68,6 +73,8 @@ let sourceOffsetInput: HTMLInputElement | undefined
 let timelineLaneList: HTMLElement | undefined
 let timelineScroll: HTMLElement | undefined
 let playButton: HTMLButtonElement | undefined
+let loopButton: HTMLButtonElement | undefined
+let followButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
 let spectrumCanvas: HTMLCanvasElement | undefined
@@ -93,6 +100,8 @@ let levelMatchAvailable = false
 let kahuSpectrum: Float32Array | undefined
 let kahuSpectrumBandCount = 0
 let timeAxisUpdatePosition: ((positionSeconds: number) => void) | undefined
+let activeRegionDrag: RegionDragSession | undefined
+let activeRegionDragCleanup: (() => void) | undefined
 
 const setMonitorComparison = (): void => {
     const dryMatchGain = levelMatchAvailable ? 10 ** (levelMatchGainDb / 20) : 1
@@ -126,10 +135,13 @@ const applyKahuAnalysis = (trackId: string, telemetry: KahuAnalysisTelemetry): v
 
 const saveSession = (): void => {
     try {
-        const viewport = timelineController.snapshot()
+        const viewport = {
+            min: timelineController.range.min,
+            max: timelineController.range.max,
+        }
         localStorage.setItem(
             SESSION_STORAGE_KEY,
-            encodeSession(createSession(trackStore.all(), rackStore, trackStore.selected()?.id, viewport)),
+            encodeSession(createSession(trackStore.all(), rackStore, trackStore.selected()?.id, viewport, transport.loopState(), followController.enabled)),
         )
         engineStatus?.replaceChildren("SESSION SAVED · SOURCE FILES LOCAL")
     } catch {
@@ -140,6 +152,8 @@ const saveSession = (): void => {
 const recoverSession = (): void => {
     try {
         const serialized = localStorage.getItem(SESSION_STORAGE_KEY)
+            ?? localStorage.getItem(LEGACY_SESSION_V3_STORAGE_KEY)
+            ?? localStorage.getItem(LEGACY_SESSION_STORAGE_KEY)
         if (serialized === null) {
             engineStatus?.replaceChildren("NO SAVED SESSION")
             return
@@ -147,8 +161,10 @@ const recoverSession = (): void => {
         const session = decodeSession(serialized)
         pendingSession = session
         recoveredTrackIds.clear()
-        timelineController.setZoom(session.viewport.zoom)
-        timelineController.setScrollFraction(session.viewport.scrollFraction)
+        timelineController.range.min = session.viewport.min
+        timelineController.range.max = session.viewport.max
+        transport.setLoop(session.loop.enabled, session.loop.startSeconds, session.loop.endSeconds)
+        followController.restore(session.follow, transport.snapshot().positionSeconds)
         if (session.selectedTrackId !== undefined) trackStore.select(session.selectedTrackId)
         const recovery = rackStore.restoreRecoverable(session.rack)
         refreshRack()
@@ -171,6 +187,9 @@ const recoverSession = (): void => {
 
 const refreshTransport = (): void => {
     const snapshot = transport.snapshot()
+    const loopEpoch = transport.consumeLoopEpoch()
+    if (loopEpoch !== undefined) playAllPlayers(loopEpoch)
+    followController.update(snapshot.positionSeconds, activeRegionDrag !== undefined)
     refreshMeter()
     timeReadout?.replaceChildren(snapshot.timecode)
     musicalReadout?.replaceChildren(snapshot.musicalPosition)
@@ -184,6 +203,10 @@ const refreshTransport = (): void => {
         snapshot.positionSeconds < timelineController.range.unitMin
             || snapshot.positionSeconds > timelineController.range.unitMax,
     )
+    loopButton?.classList.toggle("active", snapshot.loop.enabled)
+    loopButton?.setAttribute("aria-pressed", snapshot.loop.enabled ? "true" : "false")
+    followButton?.classList.toggle("active", followController.enabled)
+    followButton?.setAttribute("aria-pressed", followController.enabled ? "true" : "false")
     if (positionInput !== undefined && document.activeElement !== positionInput) {
         positionInput.value = snapshot.positionSeconds.toFixed(2)
         positionInput.max = snapshot.durationSeconds.toString()
@@ -269,26 +292,20 @@ const drawWaveform = (track: TrackState): void => {
         canvas.width = physicalWidth
         canvas.height = physicalHeight
     }
-    const regionStart = track.region.timelineStartSeconds
-    const regionEnd = regionStart + track.region.durationSeconds
-    const visibleStart = timelineController.range.unitMin
-    const visibleEnd = timelineController.range.unitMax
-    const overlapStart = Math.max(regionStart, visibleStart)
-    const overlapEnd = Math.min(regionEnd, visibleEnd)
     context.clearRect(0, 0, canvas.width, physicalHeight)
-    if (overlapEnd <= overlapStart) return
-    const sourceStartSeconds = track.region.sourceOffsetSeconds + (overlapStart - regionStart)
-    const sourceEndSeconds = track.region.sourceOffsetSeconds + (overlapEnd - regionStart)
-    const sourceStart = sourceStartSeconds * track.audio.sampleRate
-    const sourceEnd = sourceEndSeconds * track.audio.sampleRate
-    const left = timelineController.range.unitToX(overlapStart)
-    const right = timelineController.range.unitToX(overlapEnd)
-    const overlapWidth = Math.max(1, Math.ceil(right - left))
-    const peaks = extractVisibleWaveformPeaks(pyramid, sourceStart, sourceEnd, Math.max(1, Math.ceil(overlapWidth * devicePixelRatio)))
+    const projection = projectVisibleWaveform(timelineController.range, track.region, track.audio.sampleRate)
+    if (projection === undefined) return
+    const overlapWidth = Math.max(1, Math.ceil(projection.rightPixels - projection.leftPixels))
+    const peaks = extractVisibleWaveformPeaks(
+        pyramid,
+        projection.sourceStartSamples,
+        projection.sourceEndSamples,
+        Math.max(1, Math.ceil(overlapWidth * devicePixelRatio)),
+    )
     const height = physicalHeight
     const midpoint = height / 2
     context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-green")
-    const pixelOffset = Math.floor(left * devicePixelRatio)
+    const pixelOffset = Math.floor(projection.leftPixels * devicePixelRatio)
     for (let column = 0; column < peaks.minimum.length; column++) {
         const canvasColumn = pixelOffset + column
         if (canvasColumn < 0 || canvasColumn >= physicalWidth) continue
@@ -336,6 +353,37 @@ const refreshTrackDuration = (): void => {
     restartTransportRefresh()
 }
 
+const updateTimelineRegionGeometry = (): void => {
+    const root = timelineLaneList
+    if (root === undefined) return
+    for (const region of root.querySelectorAll<HTMLElement>(".timeline-region")) {
+        const track = trackStore.all().find(candidate => candidate.id === region.dataset.trackId)
+        if (track === undefined) continue
+        const style = projectRegionPixels(
+            timelineController.range,
+            track.region.timelineStartSeconds,
+            track.region.durationSeconds,
+        )
+        region.style.left = `${style.leftPixels}px`
+        region.style.width = `${style.widthPixels}px`
+    }
+}
+
+const finishRegionDrag = (approve: boolean): void => {
+    const drag = activeRegionDrag
+    if (drag === undefined) return
+    if (approve) drag.approve()
+    else drag.cancel()
+    activeRegionDragCleanup?.()
+    activeRegionDragCleanup = undefined
+    activeRegionDrag = undefined
+    refreshTimelineLanes()
+    refreshTrackDuration()
+    updateSelectedTrack()
+    const epoch = transport.reschedule()
+    if (epoch !== undefined) playAllPlayers(epoch)
+}
+
 const updateSelectedTrack = (): void => {
     const track = trackStore.selected()
     if (analysisTrackId !== track?.id) {
@@ -373,21 +421,27 @@ const updateSelectedTrack = (): void => {
 const refreshTimelineLanes = (): void => {
     const root = timelineLaneList
     if (root === undefined) return
+    if (activeRegionDrag !== undefined) {
+        updateTimelineRegionGeometry()
+        return
+    }
     root.replaceChildren()
     for (const track of trackStore.all()) {
         const row = document.createElement("div")
         row.className = `timeline-track-lane${trackStore.selected() === track ? " selected" : ""}`
-        const label = document.createElement("span")
-        label.className = "timeline-track-label"
-        label.textContent = track.name
         const area = document.createElement("div")
         area.className = "timeline-track-area"
         const region = document.createElement("button")
         region.type = "button"
         region.className = "timeline-region"
-        const style = timelineController.regionStyle(track.region.timelineStartSeconds, track.region.durationSeconds)
-        region.style.left = `${style.left}px`
-        region.style.width = `${style.width}px`
+        region.dataset.trackId = track.id
+        const style = projectRegionPixels(
+            timelineController.range,
+            track.region.timelineStartSeconds,
+            track.region.durationSeconds,
+        )
+        region.style.left = `${style.leftPixels}px`
+        region.style.width = `${style.widthPixels}px`
         region.textContent = `${track.name} · ${track.audio.durationSeconds.toFixed(1)} s`
         region.onclick = event => {
             event.stopPropagation()
@@ -396,8 +450,41 @@ const refreshTimelineLanes = (): void => {
             updateSelectedTrack()
             refreshRack()
         }
+        region.onpointerdown = event => {
+            if (event.button !== 0) return
+            event.preventDefault()
+            event.stopPropagation()
+            trackStore.select(track.id)
+            const rect = area.getBoundingClientRect()
+            const drag = new RegionDragSession(timelineController.range, track.region, event.clientX - rect.left)
+            activeRegionDrag = drag
+            region.setPointerCapture(event.pointerId)
+            const move = (moveEvent: PointerEvent): void => {
+                const viewport = (timelineScroll ?? area).getBoundingClientRect()
+                moveRangeForEdgePointer(timelineController.range, moveEvent.clientX, viewport)
+                drag.update(moveEvent.clientX - area.getBoundingClientRect().left)
+                updateTimelineRegionGeometry()
+            }
+            const up = (upEvent: PointerEvent): void => {
+                if (upEvent.pointerId === event.pointerId) finishRegionDrag(true)
+            }
+            const cancel = (): void => finishRegionDrag(false)
+            const escape = (keyEvent: KeyboardEvent): void => {
+                if (keyEvent.key === "Escape") cancel()
+            }
+            region.addEventListener("pointermove", move)
+            region.addEventListener("pointerup", up)
+            region.addEventListener("pointercancel", cancel)
+            window.addEventListener("keydown", escape)
+            activeRegionDragCleanup = () => {
+                region.removeEventListener("pointermove", move)
+                region.removeEventListener("pointerup", up)
+                region.removeEventListener("pointercancel", cancel)
+                window.removeEventListener("keydown", escape)
+            }
+        }
         area.append(region)
-        row.append(label, area)
+        row.append(area)
         root.append(row)
     }
 }
@@ -857,6 +944,9 @@ const loadAudio = async (file: File): Promise<void> => {
         refreshTrackList()
         updateSelectedTrack()
         refreshTrackDuration()
+        if (pendingSession !== undefined) {
+            transport.setLoop(pendingSession.loop.enabled, pendingSession.loop.startSeconds, pendingSession.loop.endSeconds)
+        }
         for (const device of rackStore.devicesFor(state.id)) {
             if (device.moduleId !== undefined) {
                 void initializeRuntime(state.id, device.id, device.moduleId)
@@ -885,6 +975,31 @@ const toggleTransport = async (): Promise<void> => {
         await audioContext.resume()
         playAllPlayers(transport.play())
     }
+    restartTransportRefresh()
+}
+
+const stopTransport = (): void => {
+    stopAllPlayers()
+    transport.stop()
+    restartTransportRefresh()
+}
+
+const moveTransportPosition = (direction: -1 | 1): void => {
+    const position = transport.snapshot().positionSeconds
+    const amount = Math.max(0.01, timelineController.range.unitRange / 100)
+    const epoch = transport.seek(position + direction * amount)
+    if (epoch !== undefined) playAllPlayers(epoch)
+    restartTransportRefresh()
+}
+
+const toggleLoop = (): void => {
+    transport.toggleLoop()
+    restartTransportRefresh()
+}
+
+const toggleFollow = (): void => {
+    const position = transport.snapshot().positionSeconds
+    followController.setEnabled(!followController.enabled, position)
     restartTransportRefresh()
 }
 
@@ -936,7 +1051,9 @@ replaceChildren(document.body, (
                         element.onclick = () => fileInput?.click()
                     }}>+</button>
                 </div>
+                <div className="track-header-spacer" aria-hidden="true"/>
                 <div className="track-list" onInit={element => trackList = element}/>
+                <div className="track-header-bottom-spacer" aria-hidden="true"/>
             </aside>
             <section className="timeline-panel" aria-label="Timeline">
                 <div className="timeline-toolbar">
@@ -952,6 +1069,18 @@ replaceChildren(document.body, (
                                 restartTransportRefresh()
                             }
                         }}>■</button>
+                    </div>
+                    <div className="transport-options" aria-label="Transport options">
+                        <button className="transport-toggle-button" type="button" aria-label="Toggle loop" aria-pressed="false"
+                                onInit={element => {
+                                    loopButton = element
+                                    element.onclick = toggleLoop
+                                }}>LOOP</button>
+                        <button className="transport-toggle-button" type="button" aria-label="Toggle timeline follow" aria-pressed="false"
+                                onInit={element => {
+                                    followButton = element
+                                    element.onclick = toggleFollow
+                                }}>FOLLOW</button>
                     </div>
                     <div className="time-readout">
                         <span onInit={element => timeReadout = element}>00:00:00</span>
@@ -1007,7 +1136,6 @@ replaceChildren(document.body, (
                         timeAxisUpdatePosition = navigation.timeAxis.updatePosition
                     }}/>
                     <div className="lane-grid">
-                        <div className="lane-label">MAIN INPUT</div>
                         <div className="lane-track">
                             <div className="audio-drop-zone" onInit={element => {
                                 element.ondragover = event => {
@@ -1131,6 +1259,15 @@ updateSelectedTrack()
 refreshRack()
 refreshTimelineLanes()
 refreshTransport()
+window.addEventListener("keydown", event => {
+    dispatchTransportShortcut(event, {
+        togglePlayback: () => {void toggleTransport()},
+        stop: stopTransport,
+        movePosition: moveTransportPosition,
+        toggleLoop,
+        toggleFollow,
+    })
+})
 timelineController.range.subscribe(() => {
     const track = trackStore.selected()
     refreshTimelineLanes()
@@ -1144,5 +1281,8 @@ if (timelineScroll !== undefined) {
         if (track !== undefined) drawWaveform(track)
     })
     observer.observe(timelineScroll)
+}
+if (trackList !== undefined && timelineScroll !== undefined) {
+    new TrackScrollModel(trackList, timelineScroll)
 }
 void loadCatalog()

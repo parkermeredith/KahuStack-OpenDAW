@@ -1,9 +1,10 @@
-// KBW-12 session boundary: persists versioned recoverable rack/track/view metadata without copying
-// browser audio data. Source files remain explicit owner-provided inputs during recovery.
+// KUI-7 session authority: persists normalized TimelineRange state while retaining exact KBW v1/v2
+// migration at the serialization boundary. Source audio remains an explicit browser-local recovery input.
 
 import type {RackStore} from "./rack-store"
 import type {TrackState} from "./track-store"
 import type {AudioRegion} from "./region"
+import type {TransportLoop} from "./transport"
 
 export type SessionTrack = Readonly<{
     id: string
@@ -18,23 +19,31 @@ export type SessionTrack = Readonly<{
     region: AudioRegion
 }>
 
+export type SessionViewport = Readonly<{min: number, max: number}>
+
 export type TestbedSession = Readonly<{
-    version: 2
+    version: 4
     tracks: ReadonlyArray<SessionTrack>
     rack: string
     selectedTrackId?: string
-    viewport: Readonly<{zoom: number, scrollFraction: number}>
+    viewport: SessionViewport
+    loop: TransportLoop
+    follow: boolean
 }>
 
-export const SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v2"
+export const SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v4"
+export const LEGACY_SESSION_V3_STORAGE_KEY = "kahustack-dsp-testbed.session.v3"
+export const LEGACY_SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v2"
 
 export const createSession = (
     tracks: ReadonlyArray<TrackState>,
     rack: RackStore,
     selectedTrackId?: string,
-    viewport: Readonly<{zoom: number, scrollFraction: number}> = {zoom: 1, scrollFraction: 0},
+    viewport: SessionViewport = {min: 0, max: 1},
+    loop: TransportLoop = {enabled: false, startSeconds: 0, endSeconds: 300},
+    follow = false,
 ): TestbedSession => ({
-    version: 2,
+    version: 4,
     tracks: tracks.map(track => ({
         id: track.id,
         name: track.name,
@@ -49,41 +58,78 @@ export const createSession = (
     })),
     rack: rack.serialize(),
     selectedTrackId,
-    viewport: {
-        zoom: Math.min(16, Math.max(1, viewport.zoom)),
-        scrollFraction: Math.min(1, Math.max(0, viewport.scrollFraction)),
-    },
+    viewport: normalizeViewport(viewport.min, viewport.max),
+    loop,
+    follow,
 })
 
 export const encodeSession = (session: TestbedSession): string => JSON.stringify(session)
 
 export const decodeSession = (serialized: string): TestbedSession => {
     const value: unknown = JSON.parse(serialized)
-    if (!isTestbedSession(value)) {
-        throw new Error("Invalid Kahu testbed session.")
-    }
+    if (!isTestbedSession(value)) throw new Error("Invalid Kahu testbed session.")
     if (value.version === 1) return migrateV1(value)
+    if (value.version === 2) return migrateV2(value)
+    if (value.version === 3) return migrateV3(value)
     return value
 }
 
 type LegacySession = Readonly<{
     version: 1
-    tracks: ReadonlyArray<Readonly<{id: string, name: string, fileName: string, durationSeconds: number, sampleRate: number, channelCount: number}>>
+    tracks: ReadonlyArray<Readonly<{
+        id: string
+        name: string
+        fileName: string
+        durationSeconds: number
+        sampleRate: number
+        channelCount: number
+    }>>
     rack: string
 }>
 
-const isTestbedSession = (value: unknown): value is TestbedSession | LegacySession => {
-    if (typeof value !== "object" || value === null) {
-        return false
-    }
+type VersionTwoSession = Readonly<{
+    version: 2
+    tracks: ReadonlyArray<SessionTrack>
+    rack: string
+    selectedTrackId?: string
+    viewport: Readonly<{zoom: number, scrollFraction: number}>
+}>
+
+type VersionThreeSession = Readonly<{
+    version: 3
+    tracks: ReadonlyArray<SessionTrack>
+    rack: string
+    selectedTrackId?: string
+    viewport: SessionViewport
+}>
+
+const isTestbedSession = (value: unknown): value is TestbedSession | VersionThreeSession | VersionTwoSession | LegacySession => {
+    if (typeof value !== "object" || value === null) return false
     const candidate = value as {version?: unknown, tracks?: unknown, rack?: unknown}
-    if (candidate.version !== 1 && candidate.version !== 2) return false
+    if (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4) return false
     if (!Array.isArray(candidate.tracks) || typeof candidate.rack !== "string") return false
     if (candidate.version === 2) {
         const modern = candidate as {viewport?: unknown}
-        if (!isViewport(modern.viewport)) return false
+        if (!isLegacyViewport(modern.viewport)) return false
     }
-    return candidate.tracks.every(track => isSessionTrack(track, candidate.version === 2))
+    if (candidate.version === 3) {
+        const modern = candidate as {viewport?: unknown}
+        if (!isNormalizedViewport(modern.viewport)) return false
+    }
+    if (candidate.version === 4) {
+        const modern = candidate as {viewport?: unknown, loop?: unknown, follow?: unknown}
+        if (!isNormalizedViewport(modern.viewport) || !isTransportLoop(modern.loop) || typeof modern.follow !== "boolean") return false
+    }
+    return candidate.tracks.every(track => isSessionTrack(track, candidate.version !== 1))
+}
+
+const isTransportLoop = (value: unknown): value is TransportLoop => {
+    if (typeof value !== "object" || value === null) return false
+    const loop = value as Record<string, unknown>
+    return typeof loop.enabled === "boolean"
+        && finiteNonNegative(loop.startSeconds)
+        && finitePositive(loop.endSeconds)
+        && loop.endSeconds > loop.startSeconds
 }
 
 const isSessionTrack = (value: unknown, modern: boolean): boolean => {
@@ -98,8 +144,10 @@ const isSessionTrack = (value: unknown, modern: boolean): boolean => {
         && isAudioRegion(track.region)
 }
 
-const finiteNonNegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0
-const finitePositive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+const finiteNonNegative = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0
+const finitePositive = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0
 
 const isAudioRegion = (value: unknown): value is AudioRegion => {
     if (typeof value !== "object" || value === null) return false
@@ -109,15 +157,53 @@ const isAudioRegion = (value: unknown): value is AudioRegion => {
         && finiteNonNegative(region.durationSeconds)
 }
 
-const isViewport = (value: unknown): value is {zoom: number, scrollFraction: number} => {
+const isLegacyViewport = (value: unknown): value is {zoom: number, scrollFraction: number} => {
     if (typeof value !== "object" || value === null) return false
     const viewport = value as Record<string, unknown>
     return finitePositive(viewport.zoom) && finiteNonNegative(viewport.scrollFraction)
         && viewport.scrollFraction <= 1
 }
 
+const isNormalizedViewport = (value: unknown): value is SessionViewport => {
+    if (typeof value !== "object" || value === null) return false
+    const viewport = value as Record<string, unknown>
+    return finiteNonNegative(viewport.min) && finiteNonNegative(viewport.max)
+        && viewport.min <= 1 && viewport.max <= 1 && viewport.max > viewport.min
+}
+
+const normalizeViewport = (min: number, max: number): SessionViewport => {
+    let safeMin = Number.isFinite(min) ? Math.min(1, Math.max(0, min)) : 0
+    let safeMax = Number.isFinite(max) ? Math.min(1, Math.max(0, max)) : 1
+    if (safeMax <= safeMin) {
+        safeMin = 0
+        safeMax = 1
+    }
+    return {min: safeMin, max: safeMax}
+}
+
+const defaultLoop = (tracks: ReadonlyArray<SessionTrack>): TransportLoop => ({
+    enabled: false,
+    startSeconds: 0,
+    endSeconds: Math.max(300, ...tracks.map(track => track.durationSeconds)),
+})
+
+const migrateV2 = (session: VersionTwoSession): TestbedSession => {
+    const zoom = Math.min(8, Math.max(1, session.viewport.zoom))
+    const length = 1 / zoom
+    const min = Math.min(1, Math.max(0, session.viewport.scrollFraction)) * (1 - length)
+    return {
+        version: 4,
+        tracks: session.tracks,
+        rack: session.rack,
+        selectedTrackId: session.selectedTrackId,
+        viewport: normalizeViewport(min, min + length),
+        loop: defaultLoop(session.tracks),
+        follow: false,
+    }
+}
+
 const migrateV1 = (session: LegacySession): TestbedSession => ({
-    version: 2,
+    version: 4,
     tracks: session.tracks.map(track => ({
         ...track,
         muted: false,
@@ -126,5 +212,23 @@ const migrateV1 = (session: LegacySession): TestbedSession => ({
         region: {timelineStartSeconds: 0, sourceOffsetSeconds: 0, durationSeconds: track.durationSeconds},
     })),
     rack: session.rack,
-    viewport: {zoom: 1, scrollFraction: 0},
+    viewport: {min: 0, max: 1},
+    loop: defaultLoop(session.tracks.map(track => ({
+        ...track,
+        muted: false,
+        solo: false,
+        gain: 1,
+        region: {timelineStartSeconds: 0, sourceOffsetSeconds: 0, durationSeconds: track.durationSeconds},
+    }))),
+    follow: false,
+})
+
+const migrateV3 = (session: VersionThreeSession): TestbedSession => ({
+    version: 4,
+    tracks: session.tracks,
+    rack: session.rack,
+    selectedTrackId: session.selectedTrackId,
+    viewport: session.viewport,
+    loop: defaultLoop(session.tracks),
+    follow: false,
 })

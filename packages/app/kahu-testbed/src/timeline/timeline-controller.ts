@@ -10,8 +10,6 @@ export type LegacyViewportSnapshot = Readonly<{
     visibleDurationSeconds: number
 }>
 
-export type PixelRegion = Readonly<{left: number, width: number}>
-
 export class TimelineController {
     readonly range = new TimelineRange()
 
@@ -65,12 +63,6 @@ export class TimelineController {
         return Math.min(this.durationSeconds, Math.max(0, this.range.xToUnit(x)))
     }
 
-    regionStyle(startSeconds: number, durationSeconds: number): PixelRegion {
-        const left = this.range.unitToX(Math.max(0, startSeconds))
-        const right = this.range.unitToX(Math.max(0, startSeconds + Math.max(0, durationSeconds)))
-        return {left, width: Math.max(0, right - left)}
-    }
-
     positionX(seconds: number): number {
         return this.range.unitToX(Math.min(this.durationSeconds, Math.max(0, seconds)))
     }
@@ -81,5 +73,40 @@ export class TimelineController {
         if (this.range.unitRange > this.durationSeconds || this.range.unitMax <= 0) {
             this.range.showAll()
         }
+    }
+}
+
+export class TimelineFollowController {
+    enabled = false
+    private lastPositionSeconds = 0
+
+    constructor(private readonly range: TimelineRange) {}
+
+    setEnabled(enabled: boolean, positionSeconds: number): void {
+        this.enabled = enabled
+        this.lastPositionSeconds = positionSeconds
+        if (enabled && (positionSeconds < this.range.unitMin || positionSeconds > this.range.unitMax)) {
+            this.range.moveToUnit(positionSeconds)
+        }
+    }
+
+    restore(enabled: boolean, positionSeconds: number): void {
+        this.enabled = enabled
+        this.lastPositionSeconds = positionSeconds
+    }
+
+    update(positionSeconds: number, regionDragActive: boolean): void {
+        if (!this.enabled || regionDragActive) {
+            this.lastPositionSeconds = positionSeconds
+            return
+        }
+        if (this.lastPositionSeconds <= this.range.unitMax && positionSeconds > this.range.unitMax) {
+            this.range.moveUnitBy(this.range.unitRange)
+        } else if (this.lastPositionSeconds >= this.range.unitMin && positionSeconds < this.range.unitMin) {
+            this.range.moveUnitBy(-this.range.unitRange)
+        } else if (positionSeconds < this.range.unitMin || positionSeconds > this.range.unitMax) {
+            this.range.moveToUnit(positionSeconds)
+        }
+        this.lastPositionSeconds = positionSeconds
     }
 }
