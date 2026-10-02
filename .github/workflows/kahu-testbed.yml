@@ -32,10 +32,8 @@ jobs:
 
       - name: Fetch canonical KahuStack DSP
         run: |
-          git init "$KAHU_DSP_ROOT"
-          git -C "$KAHU_DSP_ROOT" remote add origin https://github.com/parkermeredith/kahustack-dsp.git
-          git -C "$KAHU_DSP_ROOT" fetch --depth 1 origin "$KAHU_DSP_PARENT_REF"
-          git -C "$KAHU_DSP_ROOT" checkout --detach FETCH_HEAD
+          git clone --depth 1 --branch main https://github.com/parkermeredith/kahustack-dsp.git "$KAHU_DSP_ROOT"
+          test "$(git -C "$KAHU_DSP_ROOT" rev-parse HEAD)" = "$KAHU_DSP_PARENT_REF"
 
       - name: Setup Node
         uses: actions/setup-node@v4
