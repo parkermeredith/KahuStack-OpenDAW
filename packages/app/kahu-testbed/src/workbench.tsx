@@ -22,6 +22,7 @@ import {dispatchTransportShortcut} from "./timeline/transport-shortcuts"
 import {createOpenDAWIconButton, createOpenDAWToggle, createOpenDAWValueControl, setOpenDAWToggleState} from "./ui/opendaw-button"
 import {createKahuParameterKnob} from "./ui/kahu-parameter-knob"
 import {RackStore} from "./rack-store"
+import {effectiveBypass} from "./bypass-policy"
 import {
     KahuDeviceRuntime,
     KahuModuleManifest,
@@ -770,8 +771,9 @@ const refreshRack = (): void => {
             active: !device.bypassed,
             className: "rack-device-power",
             onChange: enabled => {
-                rackStore.setBypassed(track.id, device.id, !enabled)
-                kahuRuntimes.get(device.id)?.setBypassed(!enabled)
+                const deviceBypassed = !enabled
+                rackStore.setBypassed(track.id, device.id, deviceBypassed)
+                kahuRuntimes.get(device.id)?.setBypassed(effectiveBypass(bypassAll, deviceBypassed))
                 refreshRack()
             },
         })
@@ -892,7 +894,7 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
         rebuildTrackRack(trackId)
         const device = rackStore.devicesFor(trackId).find(candidate => candidate.id === deviceId)
         for (const parameter of runtime.parameters) runtime.setParameter(parameter.key, device?.parameterValues[parameter.key] ?? parameter.default)
-        runtime.setBypassed(bypassAll || (device?.bypassed ?? false))
+        runtime.setBypassed(effectiveBypass(bypassAll, device?.bypassed ?? false))
         runtimeErrors.delete(deviceId)
         engineStatus?.replaceChildren("RUST/WASM ENGINE · READY")
         refreshRack()
@@ -905,7 +907,11 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
 
 const toggleBypassAll = (): void => {
     bypassAll = !bypassAll
-    for (const runtime of kahuRuntimes.values()) runtime.setBypassed(bypassAll)
+    for (const track of trackStore.all()) {
+        for (const device of rackStore.devicesFor(track.id)) {
+            kahuRuntimes.get(device.id)?.setBypassed(effectiveBypass(bypassAll, device.bypassed))
+        }
+    }
     if (bypassAllButton === undefined) return
     setOpenDAWToggleState(bypassAllButton, bypassAll)
     bypassAllButton.replaceChildren(Icon({symbol: IconSymbol.Exclude, className: "opendaw-button-icon"}))
