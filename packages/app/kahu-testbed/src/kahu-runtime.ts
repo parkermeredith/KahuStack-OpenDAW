@@ -13,6 +13,23 @@ export type KahuParameterManifest = DspParameterManifest
 export type KahuModuleManifest = DspModuleManifest
 export type KahuLibraryManifest = LibraryManifest
 
+export type KahuAnalysisTelemetry = Readonly<{
+    processedMomentaryLufs: number | null
+    dryMomentaryLufs: number | null
+    spectrum: Float32Array
+    spectrumBandCount: number
+}>
+
+type WorkletEventData = {
+    type?: string
+    requestId?: number
+    message?: string
+    processedMomentaryLufs?: number | null
+    dryMomentaryLufs?: number | null
+    spectrum?: Float32Array
+    spectrumBandCount?: number
+}
+
 const WASM_URL = "/kahu-runtime/kahu_dsp_wasm.wasm"
 const MANIFEST_URL = "/kahu-runtime/library-manifest.json"
 let workletModule: Promise<void> | undefined
@@ -44,7 +61,21 @@ export class ReferenceDeviceRuntime {
     private readonly parameterIds = new Map<string, number>()
     private readonly parameterValues = new Map<number, number>()
     private errorHandler: ((message: string) => void) | undefined
-    private readonly errorListener = (event: MessageEvent<{type?: string, requestId?: number, message?: string}>): void => {
+    private analysisHandler: ((telemetry: KahuAnalysisTelemetry) => void) | undefined
+    private readonly errorListener = (event: MessageEvent<WorkletEventData>): void => {
+        if (event.data.type === "analysis") {
+            this.analysisHandler?.({
+                processedMomentaryLufs: finiteOrNull(event.data.processedMomentaryLufs),
+                dryMomentaryLufs: finiteOrNull(event.data.dryMomentaryLufs),
+                spectrum: event.data.spectrum ?? new Float32Array(),
+                spectrumBandCount: event.data.spectrumBandCount ?? 0,
+            })
+            return
+        }
+        if (event.data.type === "analysis-error") {
+            this.errorHandler?.(`Kahu analysis observer failed: ${event.data.message ?? "unknown error"}`)
+            return
+        }
         if (event.data.type === "error" && event.data.requestId === undefined) {
             this.errorHandler?.(event.data.message ?? "Rust-WASM processing failed.")
         }
@@ -153,6 +184,12 @@ export class ReferenceDeviceRuntime {
         this.node.port.start()
     }
 
+    setAnalysisHandler(handler: (telemetry: KahuAnalysisTelemetry) => void): void {
+        this.analysisHandler = handler
+        this.node.port.addEventListener("message", this.errorListener)
+        this.node.port.start()
+    }
+
     connectOutput(output: AudioNode): void {
         this.node.disconnect()
         this.node.connect(output)
@@ -161,6 +198,7 @@ export class ReferenceDeviceRuntime {
     dispose(): void {
         this.node.port.removeEventListener("message", this.errorListener)
         this.errorHandler = undefined
+        this.analysisHandler = undefined
         this.node.port.postMessage({type: "destroy"})
         this.node.disconnect()
     }
@@ -201,7 +239,21 @@ export class ReferenceDeviceRuntime {
 export class KahuRackRuntime {
     private nextRequestId = 1
     private errorHandler: ((message: string) => void) | undefined
-    private readonly errorListener = (event: MessageEvent<{type?: string, requestId?: number, message?: string}>): void => {
+    private analysisHandler: ((telemetry: KahuAnalysisTelemetry) => void) | undefined
+    private readonly errorListener = (event: MessageEvent<WorkletEventData>): void => {
+        if (event.data.type === "analysis") {
+            this.analysisHandler?.({
+                processedMomentaryLufs: finiteOrNull(event.data.processedMomentaryLufs),
+                dryMomentaryLufs: finiteOrNull(event.data.dryMomentaryLufs),
+                spectrum: event.data.spectrum ?? new Float32Array(),
+                spectrumBandCount: event.data.spectrumBandCount ?? 0,
+            })
+            return
+        }
+        if (event.data.type === "analysis-error") {
+            this.errorHandler?.(`Kahu analysis observer failed: ${event.data.message ?? "unknown error"}`)
+            return
+        }
         if (event.data.type === "error" && event.data.requestId === undefined) {
             this.errorHandler?.(event.data.message ?? "Rust rack processing failed.")
         }
@@ -268,9 +320,16 @@ export class KahuRackRuntime {
         this.node.port.start()
     }
 
+    setAnalysisHandler(handler: (telemetry: KahuAnalysisTelemetry) => void): void {
+        this.analysisHandler = handler
+        this.node.port.addEventListener("message", this.errorListener)
+        this.node.port.start()
+    }
+
     dispose(): void {
         this.node.port.removeEventListener("message", this.errorListener)
         this.errorHandler = undefined
+        this.analysisHandler = undefined
         this.node.port.postMessage({type: "destroy"})
         this.node.disconnect()
     }
@@ -346,9 +405,14 @@ export class KahuRackDeviceRuntime {
 
     reset(): void { this.rack.resetNode(this.nodeId) }
     setErrorHandler(handler: (message: string) => void): void { this.rack.setErrorHandler(handler) }
+    setAnalysisHandler(handler: (telemetry: KahuAnalysisTelemetry) => void): void { this.rack.setAnalysisHandler(handler) }
     move(direction: -1 | 1): Promise<void> { return this.rack.moveDevice(this.nodeId, direction) }
     connectOutput(output: AudioNode): void { void output }
     dispose(): void { void this.rack.removeDevice(this.nodeId) }
 }
 
 export type KahuDeviceRuntime = ReferenceDeviceRuntime | KahuRackDeviceRuntime
+
+const finiteOrNull = (value: number | null | undefined): number | null => (
+    value !== null && value !== undefined && Number.isFinite(value) ? value : null
+)

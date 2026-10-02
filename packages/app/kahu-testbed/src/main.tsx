@@ -13,7 +13,7 @@ import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
 import {TimelineViewport} from "./timeline"
 import {RackStore} from "./rack-store"
-import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime} from "./kahu-runtime"
+import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime, type KahuAnalysisTelemetry} from "./kahu-runtime"
 import {
     controlStep,
     controlValueToParameterValue,
@@ -83,9 +83,16 @@ let bypassAll = false
 let compareDry = false
 let inputTrimDb = 0
 let outputTrimDb = 0
+let analysisTrackId: string | undefined
+let processedMomentaryLufs: number | null = null
+let levelMatchGainDb = 0
+let levelMatchAvailable = false
+let kahuSpectrum: Float32Array | undefined
+let kahuSpectrumBandCount = 0
 
 const setMonitorComparison = (): void => {
-    dryCompare.gain.setValueAtTime(compareDry ? 1 : 0, audioContext.currentTime)
+    const dryMatchGain = levelMatchAvailable ? 10 ** (levelMatchGainDb / 20) : 1
+    dryCompare.gain.setValueAtTime(compareDry ? dryMatchGain : 0, audioContext.currentTime)
     processedCompare.gain.setValueAtTime(compareDry ? 0 : 1, audioContext.currentTime)
 }
 
@@ -97,6 +104,22 @@ setMonitorComparison()
 setOutputTrim()
 let animationFrame = 0
 let waveformZoom = 1
+
+const applyKahuAnalysis = (trackId: string, telemetry: KahuAnalysisTelemetry): void => {
+    if (trackStore.selected()?.id !== trackId) return
+    analysisTrackId = trackId
+    processedMomentaryLufs = telemetry.processedMomentaryLufs
+    const processed = telemetry.processedMomentaryLufs
+    const dry = telemetry.dryMomentaryLufs
+    levelMatchAvailable = processed !== null && dry !== null
+    if (processed !== null && dry !== null) {
+        levelMatchGainDb = Math.min(24, Math.max(-24, processed - dry))
+    }
+    kahuSpectrumBandCount = Math.min(telemetry.spectrumBandCount, telemetry.spectrum.length)
+    kahuSpectrum = kahuSpectrumBandCount > 0 ? telemetry.spectrum : undefined
+    setMonitorComparison()
+    refreshMeter()
+}
 
 const saveSession = (): void => {
     try {
@@ -175,20 +198,30 @@ const refreshMeter = (): void => {
     }
     const db = peak > 0 ? 20 * Math.log10(peak) : -Infinity
     meterFill?.style.setProperty("width", `${Math.min(1, peak) * 100}%`)
-    meterReadout?.replaceChildren(Number.isFinite(db) ? `${db.toFixed(1)} dBFS` : "-∞ dBFS")
+    const peakReadout = Number.isFinite(db) ? `${db.toFixed(1)} dBFS` : "-∞ dBFS"
+    meterReadout?.replaceChildren(processedMomentaryLufs === null
+        ? peakReadout
+        : `${processedMomentaryLufs.toFixed(1)} LUFS · A/B ${levelMatchAvailable ? `${levelMatchGainDb >= 0 ? "+" : ""}${levelMatchGainDb.toFixed(1)} dB` : "PENDING"}`)
     const canvas = spectrumCanvas
     const context = canvas?.getContext("2d")
     if (canvas !== undefined && context !== null && context !== undefined) {
-        const frequencies = new Float32Array(analyser.frequencyBinCount)
-        analyser.getFloatFrequencyData(frequencies)
         const width = canvas.width = Math.max(1, Math.floor(canvas.clientWidth * Math.min(2, window.devicePixelRatio || 1)))
         const height = canvas.height = Math.max(1, Math.floor(canvas.clientHeight * Math.min(2, window.devicePixelRatio || 1)))
         context.clearRect(0, 0, width, height)
         context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-green")
         const barWidth = width / 24
         for (let bar = 0; bar < 24; bar++) {
-            const index = Math.min(frequencies.length - 1, Math.floor((bar / 24) ** 1.8 * frequencies.length))
-            const normalized = Math.max(0, Math.min(1, (frequencies[index] + 96) / 96))
+            let normalized: number
+            if (kahuSpectrum !== undefined && kahuSpectrumBandCount > 0) {
+                const index = Math.min(kahuSpectrumBandCount - 1, Math.floor((bar / 24) ** 1.35 * kahuSpectrumBandCount))
+                const power = Math.max(1e-12, kahuSpectrum[index] ?? 0)
+                normalized = Math.max(0, Math.min(1, (10 * Math.log10(power) + 96) / 96))
+            } else {
+                const frequencies = new Float32Array(analyser.frequencyBinCount)
+                analyser.getFloatFrequencyData(frequencies)
+                const index = Math.min(frequencies.length - 1, Math.floor((bar / 24) ** 1.8 * frequencies.length))
+                normalized = Math.max(0, Math.min(1, (frequencies[index] + 96) / 96))
+            }
             context.fillRect(bar * barWidth, height * (1 - normalized), Math.max(1, barWidth - 1), height * normalized)
         }
     }
@@ -282,6 +315,15 @@ const refreshTrackDuration = (): void => {
 
 const updateSelectedTrack = (): void => {
     const track = trackStore.selected()
+    if (analysisTrackId !== track?.id) {
+        analysisTrackId = track?.id
+        processedMomentaryLufs = null
+        levelMatchGainDb = 0
+        levelMatchAvailable = false
+        kahuSpectrum = undefined
+        kahuSpectrumBandCount = 0
+        setMonitorComparison()
+    }
     if (track === undefined) {
         audioMetadata?.replaceChildren("WAV and browser-decodable audio")
         audioStatus?.replaceChildren("Drop audio or choose a file")
@@ -681,6 +723,7 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
                 let rack = rackHosts.get(trackId)
                 if (rack === undefined) {
                     rack = await KahuRackRuntime.create(audioContext, 2, 128)
+                    rack.setAnalysisHandler(telemetry => applyKahuAnalysis(trackId, telemetry))
                     rackHosts.set(trackId, rack)
                 }
                 const module = catalogModules.find(candidate => candidate.id === moduleId)
@@ -691,6 +734,7 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
             : await ReferenceDeviceRuntime.create(audioContext, 2, 128, moduleId)
         kahuRuntimes.get(deviceId)?.dispose()
         kahuRuntimes.set(deviceId, runtime)
+        runtime.setAnalysisHandler(telemetry => applyKahuAnalysis(trackId, telemetry))
         runtime.setErrorHandler(message => {
             runtimeErrors.set(deviceId, message)
             engineStatus?.replaceChildren("RUST/WASM ENGINE · ERROR")

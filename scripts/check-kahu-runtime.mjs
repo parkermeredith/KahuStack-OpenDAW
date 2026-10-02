@@ -29,5 +29,17 @@ if (!worklet.includes('registerProcessor("kahu-dsp", KahuDspProcessor)')) {
 if (/^\s*(?:import|export)\s/m.test(worklet)) {
     throw new Error("Generated Kahu worklet must be a standalone script.")
 }
+const {instance} = await WebAssembly.instantiate(await readFile(wasmPath), {})
+for (const exportName of [
+    "kahu_rack_reset_node",
+    "kahu_meter_create_profile",
+    "kahu_meter_process",
+    "kahu_perceptual_spectrum_create",
+    "kahu_perceptual_spectrum_erb_power_ptr",
+]) {
+    if (typeof instance.exports[exportName] !== "function") {
+        throw new Error(`Rust-WASM runtime is missing ${exportName}.`)
+    }
+}
 const {size: wasmBytes} = await import("node:fs/promises").then(fs => fs.stat(wasmPath))
 console.log(JSON.stringify({moduleCount: manifest.modules.length, utilityGainRegistryIndex: gain.runtime.registry_index, wasmBytes, workletBytes: worklet.length}))
