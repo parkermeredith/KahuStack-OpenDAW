@@ -334,6 +334,7 @@ const ensureWaveformPyramid = (track: TrackState): void => {
 const applyTrackGain = (track: TrackState): void => {
     const player = audioPlayers.get(track.id)
     player?.setGain(trackStore.isAudible(track) ? track.gain : 0)
+    player?.setPan(track.pan)
     player?.setInputTrim(10 ** (inputTrimDb / 20))
 }
 
@@ -480,7 +481,24 @@ const createTrackControls = (track: TrackState): HTMLElement => {
         className: "track-gain",
     })
     gain.onclick = event => event.stopPropagation()
-    cell.append(color, info, actions, gain)
+    const pan = createOpenDAWValueControl({
+        min: -1,
+        max: 1,
+        step: 0.01,
+        getValue: () => track.pan,
+        setValue: value => {
+            trackStore.setPan(track.id, value)
+            applyTrackGain(track)
+        },
+        formatValue: value => {
+            const amount = Math.round(Math.abs(value) * 100)
+            return amount === 0 ? "C" : `${value < 0 ? "L" : "R"}${amount}`
+        },
+        label: `${track.name} pan`,
+        className: "track-gain track-pan",
+    })
+    pan.onclick = event => event.stopPropagation()
+    cell.append(color, info, actions, gain, pan)
     return cell
 }
 
@@ -983,6 +1001,7 @@ const loadAudio = async (file: File): Promise<void> => {
         const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
         player.load(track.buffer)
         audioPlayers.set(state.id, player)
+        applyTrackGain(state)
         rebuildTrackRack(state.id)
         refreshTrackRows()
         updateSelectedTrack()
