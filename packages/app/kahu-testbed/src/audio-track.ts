@@ -1,5 +1,5 @@
-// KBW-3/11 browser audio boundary: decodes admitted source audio, schedules it at a shared Web
-// Audio epoch, and exposes bounded dry/processed monitor routing without owning DSP semantics.
+// KBW-3/11/15 browser audio boundary: decodes admitted source audio, schedules it at a shared Web
+// Audio epoch, and exposes bounded channel/monitor routing without owning DSP semantics.
 
 export type DecodedAudioFile = Readonly<{
     name: string
@@ -26,6 +26,7 @@ export class AudioTrackPlayer {
     private startedAtSeconds = 0
     private offsetSeconds = 0
     private readonly gainNode: GainNode
+    private readonly panNode: StereoPannerNode
     private readonly inputTrimNode: GainNode
 
     constructor(
@@ -34,8 +35,10 @@ export class AudioTrackPlayer {
         output: AudioNode = context.destination
     ) {
         this.gainNode = context.createGain()
+        this.panNode = context.createStereoPanner()
         this.inputTrimNode = context.createGain()
-        this.gainNode.connect(this.inputTrimNode)
+        this.gainNode.connect(this.panNode)
+        this.panNode.connect(this.inputTrimNode)
         this.inputTrimNode.connect(output)
     }
 
@@ -125,6 +128,10 @@ export class AudioTrackPlayer {
 
     setGain(gain: number): void {
         this.gainNode.gain.setValueAtTime(Math.min(1, Math.max(0, gain)), this.context.currentTime)
+    }
+
+    setPan(pan: number): void {
+        this.panNode.pan.setValueAtTime(Math.min(1, Math.max(-1, pan)), this.context.currentTime)
     }
 
     setOutput(output: AudioNode): void {
