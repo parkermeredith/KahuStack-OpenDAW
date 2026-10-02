@@ -36,4 +36,19 @@ describe("KBW rack store", () => {
             bypassed: true
         })
     })
+
+    it("recovers valid devices when one persisted device is malformed", () => {
+        const store = new RackStore()
+        const report = store.restoreRecoverable(JSON.stringify({
+            version: 2,
+            chains: [{trackId: "track-01", devices: [
+                {id: "rack-01", name: "Gain", moduleId: "utility.gain", parameterValues: {gain_db: 0}, bypassed: false},
+                {id: "rack-02", name: "Broken", moduleId: "utility.gain", parameterValues: {gain_db: "bad"}, bypassed: false},
+            ]}],
+        }))
+        expect(report.restoredDevices).toBe(1)
+        expect(report.skippedDevices).toBe(1)
+        expect(store.devicesFor("track-01")).toHaveLength(1)
+        expect(store.devicesFor("track-01")[0]?.id).toBe("rack-01")
+    })
 })

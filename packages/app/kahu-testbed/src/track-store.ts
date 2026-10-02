@@ -13,22 +13,46 @@ export type TrackState = {
     region: AudioRegion
 }
 
+export type RestoredTrackState = Readonly<Partial<Pick<TrackState, "id" | "name" | "muted" | "solo" | "gain" | "region">>>
+
 export class TrackStore {
     private readonly tracks = new Map<string, TrackState>()
     private nextId = 1
     private selectedTrackId: string | undefined
 
-    add(audio: DecodedAudioFile): TrackState {
-        const id = `track-${this.nextId.toString().padStart(2, "0")}`
-        this.nextId += 1
+    add(audio: DecodedAudioFile, restored?: RestoredTrackState): TrackState {
+        const restoredId = restored?.id
+        const id = typeof restoredId === "string" && /^track-\d+$/.test(restoredId) && !this.tracks.has(restoredId)
+            ? restoredId
+            : `track-${this.nextId.toString().padStart(2, "0")}`
+        const numericId = Number(id.replace("track-", ""))
+        this.nextId = Math.max(this.nextId + 1, Number.isFinite(numericId) ? numericId + 1 : this.nextId)
+        const durationSeconds = Math.max(0, audio.durationSeconds)
+        const restoredRegion = restored?.region
+        const sourceOffsetSeconds = clamp(
+            restoredRegion?.sourceOffsetSeconds,
+            0,
+            durationSeconds,
+        )
+        const duration = clamp(
+            restoredRegion?.durationSeconds,
+            0,
+            durationSeconds - sourceOffsetSeconds,
+        )
         const track: TrackState = {
             id,
             audio,
-            name: audio.name,
-            muted: false,
-            solo: false,
-            gain: 1,
-            region: createAudioRegion(audio.durationSeconds),
+            name: typeof restored?.name === "string" && restored.name.length > 0 ? restored.name : audio.name,
+            muted: restored?.muted ?? false,
+            solo: restored?.solo ?? false,
+            gain: clamp(restored?.gain, 0, 1, 1),
+            region: restoredRegion === undefined
+                ? createAudioRegion(durationSeconds)
+                : {
+                    timelineStartSeconds: clamp(restoredRegion.timelineStartSeconds, 0, Number.MAX_SAFE_INTEGER),
+                    sourceOffsetSeconds,
+                    durationSeconds: duration,
+                },
         }
         this.tracks.set(id, track)
         this.selectedTrackId = id
@@ -99,4 +123,9 @@ export class TrackStore {
             0,
         )
     }
+}
+
+const clamp = (value: number | undefined, minimum: number, maximum: number, fallback = minimum): number => {
+    if (value === undefined || !Number.isFinite(value)) return fallback
+    return Math.min(maximum, Math.max(minimum, value))
 }

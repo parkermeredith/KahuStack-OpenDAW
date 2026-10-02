@@ -41,4 +41,21 @@ describe("KBW-4 track store", () => {
         expect(track.region).toEqual({timelineStartSeconds: 3, sourceOffsetSeconds: 2, durationSeconds: 6})
         expect(store.durationSeconds()).toBe(9)
     })
+
+    it("restores stable identity and clamps metadata to the decoded source", () => {
+        const store = new TrackStore()
+        const track = store.add(audio("Vocal.wav", 8), {
+            id: "track-07",
+            name: "Lead vocal",
+            muted: true,
+            solo: true,
+            gain: 2,
+            region: {timelineStartSeconds: 3, sourceOffsetSeconds: 7, durationSeconds: 9},
+        })
+        expect(track.id).toBe("track-07")
+        expect(track.name).toBe("Lead vocal")
+        expect(track.gain).toBe(1)
+        expect(track.region).toEqual({timelineStartSeconds: 3, sourceOffsetSeconds: 7, durationSeconds: 1})
+        expect(store.add(audio("Second.wav", 1)).id).toBe("track-08")
+    })
 })

@@ -14,6 +14,14 @@ export type RackSession = Readonly<{
     chains: ReadonlyArray<Readonly<{trackId: string, devices: ReadonlyArray<Readonly<RackDevice>>}>>
 }>
 
+export type RackRecoveryReport = Readonly<{
+    restoredChains: number
+    restoredDevices: number
+    skippedChains: number
+    skippedDevices: number
+    errors: ReadonlyArray<string>
+}>
+
 export class RackStore {
     private readonly chains = new Map<string, RackDevice[]>()
     private nextId = 1
@@ -112,6 +120,66 @@ export class RackStore {
         this.nextId = highestId + 1
     }
 
+    restoreRecoverable(serialized: string): RackRecoveryReport {
+        const errors: string[] = []
+        let parsed: unknown
+        try {
+            parsed = JSON.parse(serialized)
+        } catch {
+            this.chains.clear()
+            this.nextId = 1
+            return {restoredChains: 0, restoredDevices: 0, skippedChains: 0, skippedDevices: 0, errors: ["Rack metadata is not valid JSON."]}
+        }
+        if (typeof parsed !== "object" || parsed === null) {
+            this.chains.clear()
+            this.nextId = 1
+            return {restoredChains: 0, restoredDevices: 0, skippedChains: 0, skippedDevices: 0, errors: ["Rack metadata is not an object."]}
+        }
+        const candidate = parsed as {version?: unknown, chains?: unknown}
+        if ((candidate.version !== 1 && candidate.version !== 2) || !Array.isArray(candidate.chains)) {
+            this.chains.clear()
+            this.nextId = 1
+            return {restoredChains: 0, restoredDevices: 0, skippedChains: 0, skippedDevices: 0, errors: ["Rack metadata has an unsupported shape."]}
+        }
+
+        this.chains.clear()
+        let highestId = 0
+        let restoredChains = 0
+        let restoredDevices = 0
+        let skippedChains = 0
+        let skippedDevices = 0
+        for (const rawChain of candidate.chains) {
+            if (!isRackChainContainer(rawChain)) {
+                skippedChains += 1
+                errors.push("Skipped malformed rack chain.")
+                continue
+            }
+            const devices: RackDevice[] = []
+            for (const rawDevice of rawChain.devices) {
+                if (!isRackDevice(rawDevice)) {
+                    skippedDevices += 1
+                    errors.push(`Skipped malformed device in ${rawChain.trackId}.`)
+                    continue
+                }
+                const device: RackDevice = {
+                    id: rawDevice.id,
+                    trackId: rawChain.trackId,
+                    name: rawDevice.name,
+                    moduleId: rawDevice.moduleId,
+                    parameterValues: {...rawDevice.parameterValues},
+                    bypassed: rawDevice.bypassed,
+                }
+                devices.push(device)
+                highestId = Math.max(highestId, Number(device.id.replace("rack-", "")) || 0)
+                restoredDevices += 1
+            }
+            this.chains.set(rawChain.trackId, devices)
+            restoredChains += 1
+        }
+        this.nextId = highestId + 1
+        return {restoredChains, restoredDevices, skippedChains, skippedDevices, errors}
+    }
+
     private find(trackId: string, deviceId: string): RackDevice | undefined {
         return this.chains.get(trackId)?.find(device => device.id === deviceId)
     }
@@ -123,18 +191,25 @@ const isRackSession = (value: unknown): value is RackSession => {
     }
     const candidate = value as {version?: unknown, chains?: unknown}
     if (candidate.version !== 1 && candidate.version !== 2 || !Array.isArray(candidate.chains)) return false
-    return candidate.chains.every(chain => {
-        if (typeof chain !== "object" || chain === null) return false
-        const value = chain as {trackId?: unknown, devices?: unknown}
-        if (typeof value.trackId !== "string" || !Array.isArray(value.devices)) return false
-        return value.devices.every(device => {
-            if (typeof device !== "object" || device === null) return false
-            const item = device as Record<string, unknown>
-            const values = item.parameterValues
-            return typeof item.id === "string" && typeof item.name === "string"
-                && (item.moduleId === undefined || typeof item.moduleId === "string")
-                && typeof item.bypassed === "boolean" && typeof values === "object" && values !== null
-                && Object.values(values as Record<string, unknown>).every(value => typeof value === "number" && Number.isFinite(value))
-        })
-    })
+    return candidate.chains.every(isRackChain)
+}
+
+const isRackChain = (value: unknown): value is {trackId: string, devices: ReadonlyArray<RackDevice>} => {
+    return isRackChainContainer(value) && value.devices.every(isRackDevice)
+}
+
+const isRackChainContainer = (value: unknown): value is {trackId: string, devices: ReadonlyArray<unknown>} => {
+    if (typeof value !== "object" || value === null) return false
+    const chain = value as {trackId?: unknown, devices?: unknown}
+    return typeof chain.trackId === "string" && Array.isArray(chain.devices)
+}
+
+const isRackDevice = (value: unknown): value is RackDevice => {
+    if (typeof value !== "object" || value === null) return false
+    const item = value as Record<string, unknown>
+    const values = item.parameterValues
+    return typeof item.id === "string" && typeof item.name === "string"
+        && (item.moduleId === undefined || typeof item.moduleId === "string")
+        && typeof item.bypassed === "boolean" && typeof values === "object" && values !== null
+        && Object.values(values as Record<string, unknown>).every(value => typeof value === "number" && Number.isFinite(value))
 }

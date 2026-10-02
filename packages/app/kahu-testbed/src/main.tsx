@@ -21,7 +21,7 @@ import {
     formatParameterValue,
     parameterValueToControlValue,
 } from "./parameter-editor"
-import {createSession, decodeSession, encodeSession, SESSION_STORAGE_KEY} from "./session-store"
+import {createSession, decodeSession, encodeSession, SESSION_STORAGE_KEY, type TestbedSession} from "./session-store"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
@@ -51,6 +51,8 @@ const CONSOLIDATED_RACK_RUNTIME = true
 const kahuRuntimes = new Map<string, KahuDeviceRuntime>()
 const rackHosts = new Map<string, KahuRackRuntime>()
 const runtimeErrors = new Map<string, string>()
+let pendingSession: TestbedSession | undefined
+const recoveredTrackIds = new Set<string>()
 let catalogModules: ReadonlyArray<KahuModuleManifest> = []
 let timeReadout: HTMLElement | undefined
 let musicalReadout: HTMLElement | undefined
@@ -117,10 +119,12 @@ const recoverSession = (): void => {
             return
         }
         const session = decodeSession(serialized)
+        pendingSession = session
+        recoveredTrackIds.clear()
         timelineViewport.setZoom(session.viewport.zoom)
         timelineViewport.setScrollFraction(session.viewport.scrollFraction)
         if (session.selectedTrackId !== undefined) trackStore.select(session.selectedTrackId)
-        rackStore.restore(session.rack)
+        const recovery = rackStore.restoreRecoverable(session.rack)
         refreshRack()
         for (const track of trackStore.all()) {
             for (const device of rackStore.devicesFor(track.id)) {
@@ -129,7 +133,11 @@ const recoverSession = (): void => {
                 }
             }
         }
-        engineStatus?.replaceChildren("SESSION RECOVERED · RESELECT SOURCE AUDIO")
+        const skipped = recovery.skippedChains + recovery.skippedDevices
+        const warning = skipped > 0 || recovery.errors.length > 0
+            ? ` · ${skipped} INVALID RACK ENTRIES SKIPPED`
+            : ""
+        engineStatus?.replaceChildren(`SESSION RECOVERED · RESELECT SOURCE AUDIO${warning}`)
     } catch {
         engineStatus?.replaceChildren("SESSION RECOVERY FAILED")
     }
@@ -580,11 +588,20 @@ const refreshRack = (): void => {
         const name = document.createElement("strong")
         name.textContent = runtime === undefined ? device.name : `${runtime.name} · ${runtime.moduleId}`
         const status = document.createElement("small")
-        status.textContent = device.bypassed ? "BYPASSED" : runtime === undefined ? "RUNTIME PENDING" : "RUST/WASM ACTIVE"
+        const module = catalogModules.find(candidate => candidate.id === device.moduleId)
+        const moduleUnavailable = device.moduleId !== undefined && module === undefined
+        status.textContent = device.bypassed
+            ? "BYPASSED"
+            : runtimeErrors.has(device.id)
+                ? "RUNTIME ERROR"
+                : moduleUnavailable
+                    ? "MODULE UNAVAILABLE"
+                    : runtime === undefined ? "RUNTIME PENDING" : "RUST/WASM ACTIVE"
         cardHeader.append(name, status)
         const body = document.createElement("p")
         body.textContent = runtime === undefined
-            ? runtimeErrors.get(device.id) ?? "Waiting for the staged Kahu runtime"
+            ? runtimeErrors.get(device.id)
+                ?? (moduleUnavailable ? `No staged catalog entry for ${device.moduleId}` : "Waiting for the staged Kahu runtime")
             : `${runtime.moduleId} · ${runtime.latency} sample latency`
         const controls = document.createElement("div")
         controls.className = "rack-device-controls"
@@ -641,7 +658,6 @@ const refreshRack = (): void => {
             controls.append(reset)
         }
         controls.append(bypass, moveLeft, moveRight, remove)
-        const module = catalogModules.find(candidate => candidate.id === device.moduleId)
         const parameters = runtime?.parameters ?? module?.parameters ?? []
         const parameterRows = document.createElement("div")
         parameterRows.className = "rack-parameter-list"
@@ -760,7 +776,13 @@ const loadAudio = async (file: File): Promise<void> => {
     try {
         const track = await decodeAudioFile(audioContext, file)
         const wasPlaying = transport.snapshot().isPlaying
-        const state = trackStore.add(track)
+        const restored = pendingSession?.tracks.find(candidate => !recoveredTrackIds.has(candidate.id)
+            && candidate.fileName.toLocaleLowerCase() === file.name.toLocaleLowerCase())
+        const state = trackStore.add(track, restored)
+        if (restored !== undefined) {
+            recoveredTrackIds.add(restored.id)
+            if (pendingSession?.selectedTrackId === restored.id) trackStore.select(restored.id)
+        }
         const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
         player.load(track.buffer)
         audioPlayers.set(state.id, player)
@@ -768,6 +790,15 @@ const loadAudio = async (file: File): Promise<void> => {
         refreshTrackList()
         updateSelectedTrack()
         refreshTrackDuration()
+        for (const device of rackStore.devicesFor(state.id)) {
+            if (device.moduleId !== undefined) {
+                void initializeRuntime(state.id, device.id, device.moduleId)
+            }
+        }
+        const pendingSources = pendingSession?.tracks.length ?? 0
+        if (pendingSources > 0 && recoveredTrackIds.size >= pendingSources) {
+            engineStatus?.replaceChildren("SESSION SOURCES RESTORED")
+        }
         if (wasPlaying) {
             const epoch = transport.reschedule()
             if (epoch !== undefined) playAllPlayers(epoch)

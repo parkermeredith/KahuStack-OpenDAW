@@ -24,5 +24,7 @@ describe("KBW-12 session store", () => {
         expect(() => decodeSession("{\"version\":3,\"tracks\":[],\"rack\":\"{}\"}")).toThrow("Invalid Kahu testbed session")
         expect(() => decodeSession("{\"version\":2,\"tracks\":[{}],\"rack\":\"{}\",\"viewport\":{}}"))
             .toThrow("Invalid Kahu testbed session")
+        expect(() => decodeSession("{\"version\":2,\"tracks\":[],\"rack\":\"{}\",\"viewport\":{\"zoom\":2,\"scrollFraction\":2}}"))
+            .toThrow("Invalid Kahu testbed session")
     })
 })

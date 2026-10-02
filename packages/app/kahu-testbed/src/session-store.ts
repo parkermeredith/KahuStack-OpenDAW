@@ -81,7 +81,7 @@ const isTestbedSession = (value: unknown): value is TestbedSession | LegacySessi
     if (!Array.isArray(candidate.tracks) || typeof candidate.rack !== "string") return false
     if (candidate.version === 2) {
         const modern = candidate as {viewport?: unknown}
-        if (typeof modern.viewport !== "object" || modern.viewport === null) return false
+        if (!isViewport(modern.viewport)) return false
     }
     return candidate.tracks.every(track => isSessionTrack(track, candidate.version === 2))
 }
@@ -95,11 +95,26 @@ const isSessionTrack = (value: unknown, modern: boolean): boolean => {
     if (!base || !modern) return base
     return typeof track.muted === "boolean" && typeof track.solo === "boolean"
         && typeof track.gain === "number" && Number.isFinite(track.gain)
-        && typeof track.region === "object" && track.region !== null
+        && isAudioRegion(track.region)
 }
 
 const finiteNonNegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0
 const finitePositive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+
+const isAudioRegion = (value: unknown): value is AudioRegion => {
+    if (typeof value !== "object" || value === null) return false
+    const region = value as Record<string, unknown>
+    return finiteNonNegative(region.timelineStartSeconds)
+        && finiteNonNegative(region.sourceOffsetSeconds)
+        && finiteNonNegative(region.durationSeconds)
+}
+
+const isViewport = (value: unknown): value is {zoom: number, scrollFraction: number} => {
+    if (typeof value !== "object" || value === null) return false
+    const viewport = value as Record<string, unknown>
+    return finitePositive(viewport.zoom) && finiteNonNegative(viewport.scrollFraction)
+        && viewport.scrollFraction <= 1
+}
 
 const migrateV1 = (session: LegacySession): TestbedSession => ({
     version: 2,
