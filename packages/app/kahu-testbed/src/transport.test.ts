@@ -40,4 +40,22 @@ describe("KBW-3 transport", () => {
         now = 12
         expect(transport.snapshot().positionSeconds).toBeCloseTo(4.975)
     })
+
+    it("reschedules every track from one shared epoch when loop end is crossed", () => {
+        let now = 0
+        const transport = new Transport(() => now, 10, 0.025)
+        transport.setLoop(true, 2, 4)
+        transport.seek(3)
+        const start = transport.play()
+        now = start.startTimeSeconds + 1
+        expect(transport.snapshot().positionSeconds).toBeCloseTo(2)
+        expect(transport.consumeLoopEpoch()).toEqual({startTimeSeconds: now + 0.025, positionSeconds: 2})
+        expect(transport.snapshot().loop.enabled).true
+    })
+
+    it("keeps loop bounds inside duration", () => {
+        const transport = new Transport(() => 0, 5)
+        transport.setLoop(true, -2, 20)
+        expect(transport.loopState()).toEqual({enabled: true, startSeconds: 0, endSeconds: 5})
+    })
 })

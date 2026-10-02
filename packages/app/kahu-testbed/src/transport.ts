@@ -1,9 +1,17 @@
-// KBW-3 transport authority: one sample-clock epoch for UI state and synchronized track scheduling.
+// KBW-3/KUI-8 transport authority: one sample-clock epoch for UI state, synchronized track scheduling,
+// and loop-boundary rescheduling.
+
+export type TransportLoop = Readonly<{
+    enabled: boolean
+    startSeconds: number
+    endSeconds: number
+}>
 
 export type TransportSnapshot = Readonly<{
     positionSeconds: number
     durationSeconds: number
     isPlaying: boolean
+    loop: TransportLoop
     timecode: string
     musicalPosition: string
 }>
@@ -37,6 +45,8 @@ export class Transport {
     private startedAtSeconds = 0
     private playing = false
     private durationSeconds: number
+    private loop: TransportLoop
+    private pendingLoopEpoch: TransportEpoch | undefined
 
     constructor(
         private readonly clock: TransportClock = () => performance.now() / 1000,
@@ -44,12 +54,31 @@ export class Transport {
         private readonly safetyOffsetSeconds = DEFAULT_TRANSPORT_SAFETY_OFFSET_SECONDS
     ) {
         this.durationSeconds = Math.max(0.01, durationSeconds)
+        this.loop = {enabled: false, startSeconds: 0, endSeconds: this.durationSeconds}
     }
 
     setDuration(seconds: number): void {
         this.durationSeconds = Math.max(0.01, seconds)
         this.positionSeconds = Math.min(this.positionSeconds, this.durationSeconds)
+        this.loop = {
+            ...this.loop,
+            startSeconds: Math.min(this.loop.startSeconds, this.durationSeconds),
+            endSeconds: Math.max(Math.min(this.loop.endSeconds, this.durationSeconds), 0.01),
+        }
     }
+
+    setLoop(enabled: boolean, startSeconds = this.loop.startSeconds, endSeconds = this.loop.endSeconds): void {
+        const start = Math.min(this.durationSeconds - 0.01, Math.max(0, startSeconds))
+        const end = Math.min(this.durationSeconds, Math.max(start + 0.01, endSeconds))
+        this.loop = {enabled, startSeconds: start, endSeconds: end}
+    }
+
+    toggleLoop(): TransportLoop {
+        this.setLoop(!this.loop.enabled)
+        return this.loop
+    }
+
+    loopState(): TransportLoop {return this.loop}
 
     play(): TransportEpoch {
         this.updatePosition()
@@ -72,6 +101,7 @@ export class Transport {
         this.playing = false
         this.positionSeconds = 0
         this.startedAtSeconds = this.clock()
+        this.pendingLoopEpoch = undefined
     }
 
     toggle(): void {
@@ -97,12 +127,19 @@ export class Transport {
         return this.scheduleAt(this.positionSeconds)
     }
 
+    consumeLoopEpoch(): TransportEpoch | undefined {
+        const epoch = this.pendingLoopEpoch
+        this.pendingLoopEpoch = undefined
+        return epoch
+    }
+
     snapshot(): TransportSnapshot {
         this.updatePosition()
         return {
             positionSeconds: this.positionSeconds,
             durationSeconds: this.durationSeconds,
             isPlaying: this.playing,
+            loop: this.loop,
             timecode: formatTimecode(this.positionSeconds),
             musicalPosition: formatMusicalPosition(this.positionSeconds)
         }
@@ -115,6 +152,18 @@ export class Transport {
         const now = this.clock()
         this.positionSeconds += Math.max(0, now - this.startedAtSeconds)
         this.startedAtSeconds = now
+        if (this.loop.enabled && this.positionSeconds >= this.loop.endSeconds) {
+            const loopLength = this.loop.endSeconds - this.loop.startSeconds
+            const elapsed = Math.max(0, this.positionSeconds - this.loop.startSeconds)
+            this.positionSeconds = this.loop.startSeconds + (elapsed % loopLength)
+            const startTimeSeconds = now + Math.min(0.1, Math.max(0, this.safetyOffsetSeconds))
+            this.startedAtSeconds = startTimeSeconds
+            this.pendingLoopEpoch = {
+                startTimeSeconds,
+                positionSeconds: this.loop.startSeconds,
+            }
+            return
+        }
         if (this.positionSeconds >= this.durationSeconds) {
             this.positionSeconds = this.durationSeconds
             this.playing = false
