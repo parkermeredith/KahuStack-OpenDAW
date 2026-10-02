@@ -86,7 +86,6 @@ let sourceOffsetInput: HTMLInputElement | undefined
 let timelineViewport: HTMLElement | undefined
 let trackTimelineRows: HTMLElement | undefined
 let playButton: HTMLButtonElement | undefined
-let stopButton: HTMLButtonElement | undefined
 let loopButton: HTMLButtonElement | undefined
 let followButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
@@ -1105,7 +1104,6 @@ replaceChildren(document.body, IconLibrary(), (
                                 element.onclick = () => {void toggleTransport()}
                             }}><Icon symbol={IconSymbol.Play} className="opendaw-button-icon"/></button>
                             <button className="stop-button" type="button" aria-label="Stop" onInit={element => {
-                                stopButton = element
                                 element.onclick = stopTransport
                             }}><Icon symbol={IconSymbol.Stop} className="opendaw-button-icon"/></button>
                         </div>
