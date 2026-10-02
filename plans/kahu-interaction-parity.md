@@ -1,6 +1,6 @@
 # Kahu Interaction Parity — OpenDAW Timeline and Control Convergence Plan
 
-Status: **KUI-8 SOURCE COMPLETE / KUI-9 IMPLEMENTATION IN PROGRESS**
+Status: **KUI-10 SOURCE COMPLETE / OWNER VALIDATION PENDING**
 Program: **KUI — Kahu UI Interaction Parity**  
 Date: 2026-10-01  
 Repository: `parkermeredith/KahuStack-OpenDAW`  
@@ -104,6 +104,15 @@ retaining the exact v2 normalized-range conversion. Transport loop crossing resc
 from one shared sample-clock epoch, follow pages by one visible range, and Space/Period/arrows/Shift+L/
 Shift+F are wired outside editable controls. Focused source tests, typecheck, lint, and build pass;
 owner browser qualification remains pending.
+
+KUI-9/KUI-10 implementation evidence: visible track/rack/transport actions now use the OpenDAW icon
+library and compact toggle styling. Track gain, continuous manifest parameters, input trim, and output
+trim use the extracted `ValueDragging` contract; reprepare parameters commit only on drag finalization,
+while Kahu display formatting and value conversion remain unchanged. Native selectors remain only for
+module/enum choices, and number fields remain only for precision entry. The obsolete timeline source,
+primary zoom/seek range inputs, duplicate lane label, and competing scroll-width viewport model are gone.
+The child documentation, full Studio build, Kahu build, runtime gate, benchmark, typecheck, lint, and
+focused tests pass; Chrome/Edge interaction and audio qualification remain owner-run.
 
 ---
 
@@ -1144,6 +1153,12 @@ Specific control targets:
 
 Any remaining raw browser-native visible range/select/button control must be listed in the KUI closure report with an explicit reason.
 
+KUI closure exceptions: native number inputs remain for precision seek and region timing entry;
+native selectors remain for module selection and discrete manifest enums; the textual PROC/DRY label
+remains the clearest A/B state readout. These controls do not act as timeline or continuous-value
+authorities. Pause uses a CSS two-bar glyph because `IconSymbol` provides Play and Stop but no Pause
+symbol; all other matching transport, track, rack, and add/remove actions use `@opendaw/studio-icons`.
+
 Commit:
 
 `refactor(kahu-ui): converge controls on OpenDAW interactions`
@@ -1208,8 +1223,8 @@ Use this table during implementation and update statuses only with evidence.
 | KUI-6 | SOURCE COMPLETE / OWNER VALIDATION PENDING | fixed headers and horizontally navigable lanes are cleanly separated. |
 | KUI-7 | SOURCE COMPLETE / OWNER VALIDATION PENDING | region drag + session range migration complete. |
 | KUI-8 | SOURCE COMPLETE / OWNER VALIDATION PENDING | transport/loop/follow shortcuts and controls match intended openDAW subset. |
-| KUI-9 | IMPLEMENTATION IN PROGRESS | all workbench controls audited and harmonized. |
-| KUI-10 | PLANNED | obsolete substitutes removed; full validation and docs complete. |
+| KUI-9 | SOURCE COMPLETE / OWNER VALIDATION PENDING | all workbench controls audited and harmonized. |
+| KUI-10 | SOURCE COMPLETE / OWNER VALIDATION PENDING | obsolete substitutes removed; full validation and docs complete. |
 
 ---
 

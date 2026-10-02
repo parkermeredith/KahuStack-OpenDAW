@@ -4,9 +4,11 @@ This is a minimal, separate openDAW-family app for evaluating KahuStack DSP modu
 not a second Studio and does not redefine Kahu module IDs, parameter semantics, or realtime
 processing contracts.
 
-The active hardening program is **KBW — Kahu Browser Workbench v2**. Earlier prototype labels are
-history. KBW targets normal songs, stems, and reference tracks from seconds through tens of
-minutes; long-form streaming audio is explicitly deferred.
+The active hardening programs are **KBW — Kahu Browser Workbench v2** and **KUI — Kahu UI
+Interaction Parity**. Earlier prototype labels are history. KBW targets normal songs, stems, and
+reference tracks from seconds through tens of minutes; long-form streaming audio is explicitly
+deferred. KUI aligns the reduced workbench's timeline, transport, track, rack, and value-control
+interactions with openDAW without importing the full Studio application.
 
 ## Commands
 
@@ -44,11 +46,15 @@ fallback. A missing or failed Kahu artifact is surfaced in the rack while dry br
 remains available for diagnosis.
 
 The generated catalog is the module-selection authority and is parsed through the parent-owned
-canonical validator. The current source-safe host path is
-one compact audio track, retained audio-effect rack state, module parameters, bypass/reset,
-output meter, and versioned local session metadata. Browser-local source files must be selected
-again after recovery; the session records their names and technical metadata rather than copying
-full PCM data.
+canonical validator. The current source-safe host path is one compact audio track, retained
+audio-effect rack state, module parameters, bypass/reset, output meter, and versioned local session
+metadata. Timeline viewport state, loop state, and follow state are persisted in the v4 session
+boundary. Browser-local source files must be selected again after recovery; the session records their
+names and technical metadata rather than copying full PCM data.
+
+KUI's intentional native-control exceptions are precision number fields for exact timing/seek entry
+and compact native selectors for module/enum choices. Major continuous controls use OpenDAW-style
+relative value dragging; manifest conversion, display units, and reprepare behavior remain Kahu-owned.
 
 The AudioWorklet also routes the parent-owned level-match loudness profile and perceptual-spectrum
 observer through the same Rust-WASM artifact. The monitor uses those observations for A/B dry

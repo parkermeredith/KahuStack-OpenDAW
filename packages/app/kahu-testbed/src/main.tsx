@@ -3,10 +3,12 @@
 import "./main.sass"
 import "./timeline/timeline-navigation.sass"
 import "./timeline/timeline-range-slider.sass"
+import "./ui/opendaw-control.sass"
 // The classic TypeScript JSX transform consumes createElement in generated output.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
 import {replaceChildren, createElement} from "@opendaw/lib-jsx"
-import {initializeColors} from "@opendaw/studio-enums"
+import {Icon, IconLibrary} from "@opendaw/studio-icons"
+import {IconSymbol, initializeColors} from "@opendaw/studio-enums"
 import {TestbedShell} from "./shell"
 import {DEFAULT_TRANSPORT_DURATION_SECONDS, Transport, TransportEpoch} from "./transport"
 import {AudioTrackPlayer, decodeAudioFile} from "./audio-track"
@@ -21,10 +23,10 @@ import {projectRegionPixels, projectVisibleWaveform} from "./timeline/visible-wa
 import {TrackScrollModel} from "./timeline/track-scroll"
 import {moveRangeForEdgePointer, RegionDragSession} from "./timeline/region-drag"
 import {dispatchTransportShortcut} from "./timeline/transport-shortcuts"
+import {createOpenDAWIconButton, createOpenDAWToggle, createOpenDAWValueControl, setOpenDAWToggleState} from "./ui/opendaw-button"
 import {RackStore} from "./rack-store"
 import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime, type KahuAnalysisTelemetry} from "./kahu-runtime"
 import {
-    controlStep,
     controlValueToParameterValue,
     editorKind,
     formatParameterValue,
@@ -73,6 +75,7 @@ let sourceOffsetInput: HTMLInputElement | undefined
 let timelineLaneList: HTMLElement | undefined
 let timelineScroll: HTMLElement | undefined
 let playButton: HTMLButtonElement | undefined
+let stopButton: HTMLButtonElement | undefined
 let loopButton: HTMLButtonElement | undefined
 let followButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
@@ -102,6 +105,13 @@ let kahuSpectrumBandCount = 0
 let timeAxisUpdatePosition: ((positionSeconds: number) => void) | undefined
 let activeRegionDrag: RegionDragSession | undefined
 let activeRegionDragCleanup: (() => void) | undefined
+
+const createPauseIcon = (): HTMLElement => {
+    const icon = document.createElement("span")
+    icon.className = "pause-glyph"
+    icon.setAttribute("aria-hidden", "true")
+    return icon
+}
 
 const setMonitorComparison = (): void => {
     const dryMatchGain = levelMatchAvailable ? 10 ** (levelMatchGainDb / 20) : 1
@@ -194,7 +204,7 @@ const refreshTransport = (): void => {
     timeReadout?.replaceChildren(snapshot.timecode)
     musicalReadout?.replaceChildren(snapshot.musicalPosition)
     timeAxisUpdatePosition?.(snapshot.positionSeconds)
-    playButton?.replaceChildren(snapshot.isPlaying ? "Ⅱ" : "▶")
+    playButton?.replaceChildren(snapshot.isPlaying ? createPauseIcon() : Icon({symbol: IconSymbol.Play, className: "opendaw-button-icon"}))
     playButton?.setAttribute("aria-label", snapshot.isPlaying ? "Pause" : "Play")
     const playheadX = timelineController.positionX(snapshot.positionSeconds)
     playhead?.style.setProperty("left", `${playheadX}px`)
@@ -541,52 +551,54 @@ const refreshTrackList = (): void => {
         info.append(title, summary)
         const actions = document.createElement("div")
         actions.className = "track-actions"
-        const mute = document.createElement("button")
-        mute.className = `track-action${track.muted ? " active" : ""}`
-        mute.type = "button"
-        mute.textContent = "M"
-        mute.title = "Mute track"
-        mute.onclick = event => {
-            event.stopPropagation()
-            trackStore.setMuted(track.id, !track.muted)
-            refreshTrackPlayers()
-            refreshTrackList()
-        }
-        const solo = document.createElement("button")
-        solo.className = `track-action${track.solo ? " active" : ""}`
-        solo.type = "button"
-        solo.textContent = "S"
-        solo.title = "Solo track"
-        solo.onclick = event => {
-            event.stopPropagation()
-            trackStore.setSolo(track.id, !track.solo)
-            refreshTrackPlayers()
-            refreshTrackList()
-        }
-        const remove = document.createElement("button")
-        remove.className = "track-action remove"
-        remove.type = "button"
-        remove.textContent = "×"
-        remove.title = "Remove track"
-        remove.onclick = event => {
-            event.stopPropagation()
-            removeTrack(track.id)
-        }
+        const mute = createOpenDAWToggle({
+            symbol: IconSymbol.Mute,
+            label: "Mute track",
+            active: track.muted,
+            className: "track-action",
+            onChange: (_active, event) => {
+                event.stopPropagation()
+                trackStore.setMuted(track.id, !track.muted)
+                refreshTrackPlayers()
+                refreshTrackList()
+            },
+        })
+        const solo = createOpenDAWToggle({
+            symbol: IconSymbol.Solo,
+            label: "Solo track",
+            active: track.solo,
+            className: "track-action",
+            onChange: (_active, event) => {
+                event.stopPropagation()
+                trackStore.setSolo(track.id, !track.solo)
+                refreshTrackPlayers()
+                refreshTrackList()
+            },
+        })
+        const remove = createOpenDAWIconButton({
+            symbol: IconSymbol.Close,
+            label: "Remove track",
+            className: "track-action remove",
+            onClick: event => {
+                event.stopPropagation()
+                removeTrack(track.id)
+            },
+        })
         actions.append(mute, solo, remove)
-        const gain = document.createElement("input")
-        gain.className = "track-gain"
-        gain.type = "range"
-        gain.min = "0"
-        gain.max = "1"
-        gain.step = "0.01"
-        gain.value = track.gain.toString()
-        gain.title = "Track gain"
-        gain.setAttribute("aria-label", `${track.name} gain`)
-        gain.oninput = event => {
-            event.stopPropagation()
-            trackStore.setGain(track.id, Number(gain.value))
-            applyTrackGain(track)
-        }
+        const gain = createOpenDAWValueControl({
+            min: 0,
+            max: 1,
+            step: 0.01,
+            getValue: () => track.gain,
+            setValue: value => {
+                trackStore.setGain(track.id, value)
+                applyTrackGain(track)
+            },
+            formatValue: value => `${Math.round(value * 100)}%`,
+            label: `${track.name} gain`,
+            className: "track-gain",
+        })
+        gain.onclick = event => event.stopPropagation()
         row.append(color, info, actions, gain)
         root.append(row)
     }
@@ -653,13 +665,14 @@ const parameterEditor = (
     }
 
     if (kind === "boolean") {
-        const control = document.createElement("input")
-        control.className = "rack-parameter-toggle"
-        control.type = "checkbox"
-        control.checked = initialValue >= 0.5
-        control.disabled = runtime === undefined
-        control.setAttribute("aria-label", `${parameter.name} ${parameter.automation}`)
-        control.onchange = () => updateValue(control.checked ? 1 : 0)
+        const control = createOpenDAWToggle({
+            symbol: IconSymbol.Checkbox,
+            label: `${parameter.name} ${parameter.automation}`,
+            active: initialValue >= 0.5,
+            className: "rack-parameter-toggle",
+            disabled: runtime === undefined,
+            onChange: active => updateValue(active ? 1 : 0),
+        })
         row.append(heading, control)
         return row
     }
@@ -681,18 +694,22 @@ const parameterEditor = (
         return row
     }
 
-    const control = document.createElement("input")
-    control.className = "rack-parameter-range"
-    control.type = "range"
-    control.min = kind === "logarithmic" ? "0" : parameter.min.toString()
-    control.max = kind === "logarithmic" ? "1" : parameter.max.toString()
-    control.step = controlStep(parameter)
-    control.value = parameterValueToControlValue(parameter, initialValue).toString()
-    control.disabled = runtime === undefined
+    const controlMin = kind === "logarithmic" ? 0 : parameter.min
+    const controlMax = kind === "logarithmic" ? 1 : parameter.max
+    const control = createOpenDAWValueControl({
+        min: controlMin,
+        max: controlMax,
+        step: kind === "logarithmic" ? 0.001 : parameter.step,
+        getValue: () => parameterValueToControlValue(parameter,
+            runtime?.parameterValue(parameter.key) ?? deviceValues[parameter.key] ?? parameter.default),
+        setValue: updateValue,
+        formatValue: value => formatParameterValue(parameter, controlValueToParameterValue(parameter, value)),
+        label: `${parameter.name} ${parameter.automation}`,
+        className: "rack-parameter-value",
+        disabled: runtime === undefined,
+        commitOnFinalise: parameter.automation === "reprepare",
+    })
     control.title = `${parameter.key} · ${parameter.automation} · ${parameter.transition}`
-    control.setAttribute("aria-label", `${parameter.name} ${parameter.automation}`)
-    const event = parameter.automation === "reprepare" ? "change" : "input"
-    control.addEventListener(event, () => updateValue(Number(control.value)))
     row.append(heading, control)
     return row
 }
@@ -757,20 +774,25 @@ const refreshRack = (): void => {
             : `${runtime.moduleId} · ${runtime.latency} sample latency`
         const controls = document.createElement("div")
         controls.className = "rack-device-controls"
-        const bypass = document.createElement("button")
-        bypass.className = `rack-control${device.bypassed ? " active" : ""}`
-        bypass.type = "button"
-        bypass.textContent = "BYP"
-        bypass.onclick = () => {
-            rackStore.setBypassed(track.id, device.id, !device.bypassed)
-            kahuRuntimes.get(device.id)?.setBypassed(!device.bypassed)
-            refreshRack()
-        }
+        const bypass = createOpenDAWToggle({
+            symbol: IconSymbol.Exclude,
+            label: "Bypass processor",
+            active: device.bypassed,
+            className: "rack-control",
+            onChange: active => {
+                rackStore.setBypassed(track.id, device.id, active)
+                kahuRuntimes.get(device.id)?.setBypassed(active)
+                refreshRack()
+            },
+        })
         const moveLeft = document.createElement("button")
         moveLeft.className = "rack-control"
         moveLeft.type = "button"
-        moveLeft.textContent = "‹"
+        moveLeft.textContent = ""
         moveLeft.disabled = index === 0
+        moveLeft.classList.add("opendaw-button")
+        moveLeft.setAttribute("aria-label", "Move processor left")
+        moveLeft.replaceChildren(Icon({symbol: IconSymbol.ArrowLeft, className: "opendaw-button-icon"}))
         moveLeft.onclick = () => {
             rackStore.move(track.id, device.id, -1)
             rebuildTrackRack(track.id)
@@ -780,8 +802,11 @@ const refreshRack = (): void => {
         const moveRight = document.createElement("button")
         moveRight.className = "rack-control"
         moveRight.type = "button"
-        moveRight.textContent = "›"
+        moveRight.textContent = ""
         moveRight.disabled = index === devices.length - 1
+        moveRight.classList.add("opendaw-button")
+        moveRight.setAttribute("aria-label", "Move processor right")
+        moveRight.replaceChildren(Icon({symbol: IconSymbol.ArrowRight, className: "opendaw-button-icon"}))
         moveRight.onclick = () => {
             rackStore.move(track.id, device.id, 1)
             rebuildTrackRack(track.id)
@@ -791,7 +816,10 @@ const refreshRack = (): void => {
         const remove = document.createElement("button")
         remove.className = "rack-control remove"
         remove.type = "button"
-        remove.textContent = "×"
+        remove.textContent = ""
+        remove.classList.add("opendaw-button")
+        remove.setAttribute("aria-label", "Remove processor")
+        remove.replaceChildren(Icon({symbol: IconSymbol.Close, className: "opendaw-button-icon"}))
         remove.onclick = () => {
             kahuRuntimes.get(device.id)?.dispose()
             kahuRuntimes.delete(device.id)
@@ -804,8 +832,11 @@ const refreshRack = (): void => {
             const reset = document.createElement("button")
             reset.className = "rack-control"
             reset.type = "button"
-            reset.textContent = "RST"
+            reset.textContent = ""
             reset.title = "Reset processor"
+            reset.classList.add("opendaw-button")
+            reset.setAttribute("aria-label", "Reset processor")
+            reset.replaceChildren(Icon({symbol: IconSymbol.Undo, className: "opendaw-button-icon"}))
             reset.onclick = () => runtime.reset()
             controls.append(reset)
         }
@@ -871,7 +902,10 @@ const toggleBypassAll = (): void => {
     for (const runtime of kahuRuntimes.values()) {
         runtime.setBypassed(bypassAll)
     }
-    bypassAllButton?.replaceChildren(bypassAll ? "BYPASS OFF" : "BYPASS ALL")
+    if (bypassAllButton !== undefined) {
+        setOpenDAWToggleState(bypassAllButton, bypassAll)
+        bypassAllButton.replaceChildren(Icon({symbol: IconSymbol.Exclude, className: "opendaw-button-icon"}))
+    }
 }
 
 const handleAudioEnded = (): void => {
@@ -1023,7 +1057,7 @@ const loadCatalog = async (): Promise<void> => {
     }
 }
 
-replaceChildren(document.body, (
+replaceChildren(document.body, IconLibrary(), (
     <main className="testbed-shell">
         <header className="testbed-header">
             <div className="brand-lockup">
@@ -1048,8 +1082,9 @@ replaceChildren(document.body, (
                 <div className="panel-heading">
                     <span>TRACKS</span>
                     <button className="icon-button" type="button" aria-label="Add track" onInit={element => {
+                        element.replaceChildren(Icon({symbol: IconSymbol.Add, className: "opendaw-button-icon"}))
                         element.onclick = () => fileInput?.click()
-                    }}>+</button>
+                    }}><Icon symbol={IconSymbol.Add} className="opendaw-button-icon"/></button>
                 </div>
                 <div className="track-header-spacer" aria-hidden="true"/>
                 <div className="track-list" onInit={element => trackList = element}/>
@@ -1061,26 +1096,27 @@ replaceChildren(document.body, (
                         <button className="transport-button" type="button" aria-label="Play" onInit={element => {
                             playButton = element
                             element.onclick = () => {void toggleTransport()}
-                        }}>▶</button>
+                        }}><Icon symbol={IconSymbol.Play} className="opendaw-button-icon"/></button>
                         <button className="stop-button" type="button" aria-label="Stop" onInit={element => {
+                            stopButton = element
                             element.onclick = () => {
                                 stopAllPlayers()
                                 transport.stop()
                                 restartTransportRefresh()
                             }
-                        }}>■</button>
+                        }}><Icon symbol={IconSymbol.Stop} className="opendaw-button-icon"/></button>
                     </div>
                     <div className="transport-options" aria-label="Transport options">
                         <button className="transport-toggle-button" type="button" aria-label="Toggle loop" aria-pressed="false"
                                 onInit={element => {
                                     loopButton = element
                                     element.onclick = toggleLoop
-                                }}>LOOP</button>
+                                }}><Icon symbol={IconSymbol.Loop} className="opendaw-button-icon"/></button>
                         <button className="transport-toggle-button" type="button" aria-label="Toggle timeline follow" aria-pressed="false"
                                 onInit={element => {
                                     followButton = element
                                     element.onclick = toggleFollow
-                                }}>FOLLOW</button>
+                                }}><Icon symbol={IconSymbol.Focus} className="opendaw-button-icon"/></button>
                     </div>
                     <div className="time-readout">
                         <span onInit={element => timeReadout = element}>00:00:00</span>
@@ -1201,10 +1237,14 @@ replaceChildren(document.body, (
                 </select>
                 <button className="rack-bypass-button" type="button" onInit={element => {
                     bypassAllButton = element
+                    element.setAttribute("aria-pressed", "false")
+                    element.replaceChildren(Icon({symbol: IconSymbol.Exclude, className: "opendaw-button-icon"}))
                     element.onclick = toggleBypassAll
-                }}>BYPASS ALL</button>
+                }}><Icon symbol={IconSymbol.Exclude} className="opendaw-button-icon"/></button>
                 <button className="rack-add-button" type="button" onInit={element => {
                     addRackSlotButton = element
+                    element.setAttribute("aria-label", "Add processor slot")
+                    element.replaceChildren(Icon({symbol: IconSymbol.Add, className: "opendaw-button-icon"}))
                     element.onclick = () => {
                         const track = trackStore.selected()
                         const moduleId = modulePicker?.value ?? ""
@@ -1216,7 +1256,7 @@ replaceChildren(document.body, (
                             void initializeRuntime(track.id, device.id, module.id)
                         }
                     }
-                }}>ADD SLOT</button>
+                }}><Icon symbol={IconSymbol.Add} className="opendaw-button-icon"/></button>
             </div>
             <div className="rack-chain" onInit={element => rackList = element}/>
         </section>
@@ -1224,24 +1264,41 @@ replaceChildren(document.body, (
             <span>kahustack-dsp</span>
             <span className="runtime-info">{`${audioContext.sampleRate} Hz · 128 frame blocks`}</span>
             <label className="footer-trim">IN
-                <input type="range" min="-24" max="12" step="0.1" value="0" aria-label="Input trim dB"
-                       onInit={element => element.oninput = () => {
-                           inputTrimDb = Number(element.value)
-                           refreshTrackPlayers()
-                       }}/>
+                <span onInit={element => element.replaceChildren(createOpenDAWValueControl({
+                    min: -24,
+                    max: 12,
+                    step: 0.1,
+                    getValue: () => inputTrimDb,
+                    setValue: value => {
+                        inputTrimDb = value
+                        refreshTrackPlayers()
+                    },
+                    formatValue: value => `${value.toFixed(1)} dB`,
+                    label: "Input trim dB",
+                    className: "footer-value-control",
+                }))}/>
             </label>
             <label className="footer-trim">OUT
-                <input type="range" min="-24" max="12" step="0.1" value="0" aria-label="Output trim dB"
-                       onInit={element => element.oninput = () => {
-                           outputTrimDb = Number(element.value)
-                           setOutputTrim()
-                       }}/>
+                <span onInit={element => element.replaceChildren(createOpenDAWValueControl({
+                    min: -24,
+                    max: 12,
+                    step: 0.1,
+                    getValue: () => outputTrimDb,
+                    setValue: value => {
+                        outputTrimDb = value
+                        setOutputTrim()
+                    },
+                    formatValue: value => `${value.toFixed(1)} dB`,
+                    label: "Output trim dB",
+                    className: "footer-value-control",
+                }))}/>
             </label>
             <button className={`compare-button${compareDry ? " active" : ""}`} type="button"
-                    aria-label="Toggle dry comparison" onInit={element => element.onclick = () => {
+                    aria-label="Toggle dry comparison" aria-pressed="false" onInit={element => element.onclick = () => {
                         compareDry = !compareDry
                         setMonitorComparison()
                         element.classList.toggle("active", compareDry)
+                        element.setAttribute("aria-pressed", compareDry ? "true" : "false")
                         element.textContent = compareDry ? "DRY" : "PROC"
                     }}>PROC</button>
             <canvas className="spectrum-canvas" width="96" height="16" aria-label="Output spectrum"
@@ -1259,6 +1316,9 @@ updateSelectedTrack()
 refreshRack()
 refreshTimelineLanes()
 refreshTransport()
+stopButton?.replaceChildren(Icon({symbol: IconSymbol.Stop, className: "opendaw-button-icon"}))
+loopButton?.replaceChildren(Icon({symbol: IconSymbol.Loop, className: "opendaw-button-icon"}))
+followButton?.replaceChildren(Icon({symbol: IconSymbol.Focus, className: "opendaw-button-icon"}))
 window.addEventListener("keydown", event => {
     dispatchTransportShortcut(event, {
         togglePlayback: () => {void toggleTransport()},

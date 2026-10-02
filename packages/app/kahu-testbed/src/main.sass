@@ -152,7 +152,8 @@ button:disabled
   padding: 0.5rem 0.65rem
   border-bottom: 1px solid rgba(white, 0.05)
 
-  &.selected
+  &.selected .timeline-track-area
+    background-color: rgba(white, 0.035)
     background: linear-gradient(90deg, rgba(white, 0.06), transparent)
 
   strong, small
@@ -269,6 +270,19 @@ button:disabled
     background: var(--color-orange)
     border-color: var(--color-orange)
 
+.pause-glyph
+  display: inline-flex
+  gap: 0.15rem
+  width: 0.55rem
+  height: 0.75rem
+
+  &:before, &:after
+    content: ""
+    display: block
+    width: 0.18rem
+    height: 100%
+    background: currentColor
+
 .transport-button, .stop-button
   display: grid
   place-items: center
@@ -372,7 +386,9 @@ button:disabled
   min-height: 3.5rem
   border-top: 1px solid rgba(white, 0.04)
 
-  &.selected
+  &.selected .timeline-track-area
+    background-color: rgba(white, 0.035)
+
 .timeline-track-area
   position: relative
   width: 100%
@@ -535,6 +551,11 @@ button:disabled
   cursor: pointer
   font-size: 0.6rem
 
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
 .module-picker
   max-width: 13rem
   margin-left: 0.75rem
@@ -628,9 +649,8 @@ button:disabled
     color: var(--color-bright)
     font-size: 0.53rem
 
-.rack-parameter-range
+.rack-parameter-value
   width: 100%
-  accent-color: var(--color-green)
 
 .rack-parameter-select
   width: 100%
@@ -644,7 +664,8 @@ button:disabled
 
 .rack-parameter-toggle
   align-self: flex-start
-  accent-color: var(--color-green)
+  min-width: 1.65rem
+  min-height: 1.3rem
 
 .rack-device-header
   display: flex
@@ -712,9 +733,9 @@ button:disabled
   color: var(--color-gray)
   font-size: 0.55rem
 
-  input
-    width: 3.5rem
-    accent-color: var(--color-green)
+
+.footer-value-control
+  min-width: 4.2rem
 
 .compare-button
   min-width: 2.4rem

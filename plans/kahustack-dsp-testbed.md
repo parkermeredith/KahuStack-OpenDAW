@@ -39,6 +39,22 @@ reconstructs stable track/rack intent after source reselection, and the parent m
 semantic authority.
 Long-form streaming remains explicitly deferred.
 
+## Active program: KUI — Kahu UI Interaction Parity
+
+KUI is the current bounded interaction-parity program for the reduced Kahu workbench. It is
+subordinate to KBW and changes browser interaction composition only; Kahu DSP, Rust/WASM, manifest,
+runtime, session meaning, and realtime contracts remain parent-owned. The detailed phase authority is
+`plans/kahu-interaction-parity.md`.
+
+Current status: **KUI-0 through KUI-10 SOURCE COMPLETE / OWNER BROWSER AND AUDIO VALIDATION PENDING**.
+
+The source checkpoint includes one openDAW `TimelineRange` authority, calibrated wheel/trackpad
+navigation, a range-aware seconds ruler and navigator, visible-source waveform projection, fixed track
+headers, direct region movement, normalized v4 session state, sample-clock loop rescheduling, follow
+pages, transport shortcuts, icon/toggle controls, and OpenDAW-style value dragging. Long-form streaming,
+recording, MIDI, piano roll, clip launching, automation, full mixing, cloud collaboration, and other
+explicit scope exclusions remain deferred.
+
 KBW-14 closure work is source-complete at child `3618671a1`: prototype-era runtime names and hidden
 default Gain slots were removed, the generic worklet artifact is `kahu-worklet.js`, per-device reset
 uses the Rust rack node-reset ABI, persistent worklet errors reach the rack UI, unavailable modules
