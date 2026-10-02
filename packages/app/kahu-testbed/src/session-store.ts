@@ -1,4 +1,4 @@
-// KUI-7/KBW-15 session authority: persists normalized timeline/channel state while retaining exact legacy
+// KUI-7/KBW-15/16 session authority: persists normalized timeline/channel state while retaining exact legacy
 // migration at the serialization boundary. Source audio remains an explicit browser-local recovery input.
 
 import type {RackStore} from "./rack-store"
@@ -32,7 +32,8 @@ export type TestbedSession = Readonly<{
     follow: boolean
 }>
 
-export const SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v4"
+export const SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v5"
+export const LEGACY_SESSION_V4_STORAGE_KEY = "kahustack-dsp-testbed.session.v4"
 export const LEGACY_SESSION_V3_STORAGE_KEY = "kahustack-dsp-testbed.session.v3"
 export const LEGACY_SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v2"
 
