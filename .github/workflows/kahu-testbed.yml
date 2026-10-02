@@ -30,12 +30,12 @@ jobs:
       - name: Checkout KahuStack-OpenDAW
         uses: actions/checkout@v4
 
-      - name: Checkout canonical KahuStack DSP
-        uses: actions/checkout@v4
-        with:
-          repository: parkermeredith/kahustack-dsp
-          ref: ${{ env.KAHU_DSP_PARENT_REF }}
-          path: kahustack-dsp-parent
+      - name: Fetch canonical KahuStack DSP
+        run: |
+          git init "$KAHU_DSP_ROOT"
+          git -C "$KAHU_DSP_ROOT" remote add origin https://github.com/parkermeredith/kahustack-dsp.git
+          git -C "$KAHU_DSP_ROOT" fetch --depth 1 origin "$KAHU_DSP_PARENT_REF"
+          git -C "$KAHU_DSP_ROOT" checkout --detach FETCH_HEAD
 
       - name: Setup Node
         uses: actions/setup-node@v4
