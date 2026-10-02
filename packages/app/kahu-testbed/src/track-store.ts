@@ -1,4 +1,4 @@
-// KBW-4 track authority: stable identity, channel state, and one minimal timed source region per track.
+// KBW-4/15 track authority: stable identity, channel state, and one minimal timed source region per track.
 
 import type {DecodedAudioFile} from "./audio-track"
 import {createAudioRegion, type AudioRegion} from "./region"
@@ -10,10 +10,11 @@ export type TrackState = {
     muted: boolean
     solo: boolean
     gain: number
+    pan: number
     region: AudioRegion
 }
 
-export type RestoredTrackState = Readonly<Partial<Pick<TrackState, "id" | "name" | "muted" | "solo" | "gain" | "region">>>
+export type RestoredTrackState = Readonly<Partial<Pick<TrackState, "id" | "name" | "muted" | "solo" | "gain" | "pan" | "region">>>
 
 export class TrackStore {
     private readonly tracks = new Map<string, TrackState>()
@@ -46,6 +47,7 @@ export class TrackStore {
             muted: restored?.muted ?? false,
             solo: restored?.solo ?? false,
             gain: clamp(restored?.gain, 0, 1, 1),
+            pan: clamp(restored?.pan, -1, 1, 0),
             region: restoredRegion === undefined
                 ? createAudioRegion(durationSeconds)
                 : {
@@ -99,6 +101,13 @@ export class TrackStore {
         const track = this.tracks.get(id)
         if (track !== undefined) {
             track.gain = Math.min(1, Math.max(0, gain))
+        }
+    }
+
+    setPan(id: string, pan: number): void {
+        const track = this.tracks.get(id)
+        if (track !== undefined) {
+            track.pan = Math.min(1, Math.max(-1, pan))
         }
     }
 

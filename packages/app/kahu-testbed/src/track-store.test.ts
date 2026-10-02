@@ -9,7 +9,7 @@ const audio = (name: string, durationSeconds: number) => ({
     buffer: {} as AudioBuffer
 })
 
-describe("KBW-4 track store", () => {
+describe("KBW track store", () => {
     it("assigns stable IDs and retains selection", () => {
         const store = new TrackStore()
         const first = store.add(audio("Drums.wav", 4))
@@ -21,17 +21,29 @@ describe("KBW-4 track store", () => {
         expect(store.selected()?.name).toBe("Drums.wav")
     })
 
-    it("applies solo, mute, gain and duration rules", () => {
+    it("applies solo, mute, gain, pan and duration rules", () => {
         const store = new TrackStore()
         const first = store.add(audio("Drums.wav", 4))
         const second = store.add(audio("Bass.wav", 6))
         store.setSolo(first.id, true)
         store.setGain(first.id, 0.4)
+        store.setPan(first.id, -0.35)
         store.setMuted(second.id, true)
         expect(store.isAudible(first)).toBe(true)
         expect(store.isAudible(second)).toBe(false)
         expect(first.gain).toBe(0.4)
+        expect(first.pan).toBe(-0.35)
         expect(store.durationSeconds()).toBe(6)
+    })
+
+    it("clamps pan edits and defaults new tracks to center", () => {
+        const store = new TrackStore()
+        const track = store.add(audio("Guitar.wav", 4))
+        expect(track.pan).toBe(0)
+        store.setPan(track.id, -2)
+        expect(track.pan).toBe(-1)
+        store.setPan(track.id, 2)
+        expect(track.pan).toBe(1)
     })
 
     it("retains minimal timeline and source offsets", () => {
@@ -50,11 +62,13 @@ describe("KBW-4 track store", () => {
             muted: true,
             solo: true,
             gain: 2,
+            pan: -2,
             region: {timelineStartSeconds: 3, sourceOffsetSeconds: 7, durationSeconds: 9},
         })
         expect(track.id).toBe("track-07")
         expect(track.name).toBe("Lead vocal")
         expect(track.gain).toBe(1)
+        expect(track.pan).toBe(-1)
         expect(track.region).toEqual({timelineStartSeconds: 3, sourceOffsetSeconds: 7, durationSeconds: 1})
         expect(store.add(audio("Second.wav", 1)).id).toBe("track-08")
     })
