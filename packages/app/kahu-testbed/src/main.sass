@@ -314,20 +314,6 @@ button:disabled
   background-image: linear-gradient(rgba(white, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(white, 0.035) 1px, transparent 1px)
   background-size: 100% 3.2rem, 5rem 100%
 
-.ruler
-  display: grid
-  grid-template-columns: repeat(8, 5rem)
-  height: 2rem
-  padding-left: 1rem
-  color: var(--color-gray)
-  background: var(--color-panel-background-dark)
-  border-bottom: 1px solid rgba(white, 0.06)
-
-  span
-    padding: 0.5rem 0.35rem
-    border-left: 1px solid rgba(white, 0.08)
-    font-size: 0.62rem
-
 .lane-grid
   display: grid
   grid-template-columns: 7rem minmax(0, 1fr)
@@ -492,41 +478,6 @@ button:disabled
 
   &.outside-range
     visibility: hidden
-
-.seek-slider
-  position: absolute
-  right: 1rem
-  bottom: 0.6rem
-  left: 7rem
-  z-index: 3
-  width: calc(100% - 8rem)
-  height: 1rem
-  appearance: none
-  background: transparent
-  cursor: ew-resize
-
-  &::-webkit-slider-runnable-track
-    height: 2px
-    background: rgba(white, 0.14)
-
-  &::-webkit-slider-thumb
-    width: 8px
-    height: 8px
-    margin-top: -3px
-    appearance: none
-    background: var(--color-orange)
-    border-radius: 50%
-
-  &::-moz-range-track
-    height: 2px
-    background: rgba(white, 0.14)
-
-  &::-moz-range-thumb
-    width: 8px
-    height: 8px
-    background: var(--color-orange)
-    border: none
-    border-radius: 50%
 
 .rack-panel
   flex: 0 0 11rem

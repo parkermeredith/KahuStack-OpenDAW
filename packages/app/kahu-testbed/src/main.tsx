@@ -1,6 +1,7 @@
 // Kahu Browser Workbench entrypoint: composes the browser host without owning DSP behavior.
 
 import "./main.sass"
+import "./timeline/timeline-navigation.sass"
 // The classic TypeScript JSX transform consumes createElement in generated output.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
 import {replaceChildren, createElement} from "@opendaw/lib-jsx"
@@ -12,6 +13,8 @@ import {buildWaveformPyramidAsync, extractVisibleWaveformPeaks, WaveformPyramid}
 import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
 import {TimelineController} from "./timeline/timeline-controller"
+import {attachWheelScroll} from "./timeline/wheel-scroll"
+import {createTimelineNavigation} from "./timeline/timeline-navigation"
 import {RackStore} from "./rack-store"
 import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime, type KahuAnalysisTelemetry} from "./kahu-runtime"
 import {
@@ -57,7 +60,6 @@ let catalogModules: ReadonlyArray<KahuModuleManifest> = []
 let timeReadout: HTMLElement | undefined
 let musicalReadout: HTMLElement | undefined
 let playhead: HTMLElement | undefined
-let seekInput: HTMLInputElement | undefined
 let positionInput: HTMLInputElement | undefined
 let timelineStartInput: HTMLInputElement | undefined
 let sourceOffsetInput: HTMLInputElement | undefined
@@ -89,6 +91,7 @@ let levelMatchGainDb = 0
 let levelMatchAvailable = false
 let kahuSpectrum: Float32Array | undefined
 let kahuSpectrumBandCount = 0
+let timeAxisUpdatePosition: ((positionSeconds: number) => void) | undefined
 
 const setMonitorComparison = (): void => {
     const dryMatchGain = levelMatchAvailable ? 10 ** (levelMatchGainDb / 20) : 1
@@ -170,6 +173,7 @@ const refreshTransport = (): void => {
     refreshMeter()
     timeReadout?.replaceChildren(snapshot.timecode)
     musicalReadout?.replaceChildren(snapshot.musicalPosition)
+    timeAxisUpdatePosition?.(snapshot.positionSeconds)
     playButton?.replaceChildren(snapshot.isPlaying ? "Ⅱ" : "▶")
     playButton?.setAttribute("aria-label", snapshot.isPlaying ? "Pause" : "Play")
     const playheadX = timelineController.positionX(snapshot.positionSeconds)
@@ -179,10 +183,6 @@ const refreshTransport = (): void => {
         snapshot.positionSeconds < timelineController.range.unitMin
             || snapshot.positionSeconds > timelineController.range.unitMax,
     )
-    if (seekInput !== undefined) {
-        seekInput.value = snapshot.positionSeconds.toString()
-        seekInput.max = snapshot.durationSeconds.toString()
-    }
     if (positionInput !== undefined && document.activeElement !== positionInput) {
         positionInput.value = snapshot.positionSeconds.toFixed(2)
         positionInput.max = snapshot.durationSeconds.toString()
@@ -999,15 +999,22 @@ replaceChildren(document.body, (
                 </div>
                 <div className="timeline-canvas" onInit={element => {
                     timelineController.setWidth(element.clientWidth)
+                    attachWheelScroll(element, timelineController.range)
                     element.onclick = event => {
                         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return
                         const bounds = element.getBoundingClientRect()
                         seekFromInput(timelineController.secondsAtX(event.clientX - bounds.left, bounds.width).toString())
                     }
                 }}>
-                    <div className="ruler" aria-hidden="true">
-                        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
-                    </div>
+                    <div className="timeline-navigation-host" onInit={element => {
+                        const navigation = createTimelineNavigation(
+                            timelineController.range,
+                            () => transport.snapshot().positionSeconds,
+                            position => seekFromInput(position.toString()),
+                        )
+                        element.append(navigation.element)
+                        timeAxisUpdatePosition = navigation.timeAxis.updatePosition
+                    }}/>
                     <div className="lane-grid">
                         <div className="lane-label">MAIN INPUT</div>
                         <div className="lane-track">
@@ -1057,12 +1064,6 @@ replaceChildren(document.body, (
                         </div>
                     </div>
                     <div className="playhead" aria-hidden="true" onInit={element => playhead = element}/>
-                    <input className="seek-slider" type="range" min="0" max={`${DEFAULT_TRANSPORT_DURATION_SECONDS}`}
-                           step="0.01" value="0" aria-label="Seek timeline"
-                           onInit={element => {
-                               seekInput = element
-                               element.oninput = () => seekFromInput(element.value)
-                           }}/>
                 </div>
             </section>
         </section>

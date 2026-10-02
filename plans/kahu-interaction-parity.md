@@ -1,6 +1,6 @@
 # Kahu Interaction Parity — OpenDAW Timeline and Control Convergence Plan
 
-Status: **KUI-1 SOURCE COMPLETE / KUI-2 IMPLEMENTATION IN PROGRESS**  
+Status: **KUI-2 SOURCE COMPLETE / KUI-3 IMPLEMENTATION IN PROGRESS**  
 Program: **KUI — Kahu UI Interaction Parity**  
 Date: 2026-10-01  
 Repository: `parkermeredith/KahuStack-OpenDAW`  
@@ -76,6 +76,13 @@ now consume that range; the enlarged DOM strip and native horizontal scrollbar a
 viewport authority. The old `TimelineViewport` source and test were removed after the new focused
 range tests passed. Legacy `zoom`/`scrollFraction` conversion is retained only at the existing
 session boundary until KUI-7 performs the versioned normalized-range migration.
+
+KUI-2 implementation evidence: the child now carries the openDAW `WheelScaling` calibration and
+`WheelScroll` routing in `src/timeline/`. The Studio preference dependency is replaced only by the
+specified fixed speed of `1.0`; delta-mode factors, quantum floor/decay, pointer anchor clamping,
+Shift zoom, Alt pan, horizontal delta pan, and non-consumed vertical wheel behavior are preserved.
+Focused tests cover the gesture contract. The Kahu timeline canvas installs the shared handler; the
+time-axis canvas will share the same range handler as KUI-3 lands.
 
 ---
 
@@ -1168,8 +1175,8 @@ Use this table during implementation and update statuses only with evidence.
 | --- | --- | --- |
 | KUI-0 | PLANNED | Baseline + complete control parity inventory checked in. |
 | KUI-1 | SOURCE COMPLETE / OWNER VALIDATION PENDING | `TimelineRange` is sole horizontal range authority. |
-| KUI-2 | IMPLEMENTATION IN PROGRESS | openDAW wheel/trackpad interaction ported and tested. |
-| KUI-3 | PLANNED | dynamic time axis + ruler scrub replace static ruler/seek slider. |
+| KUI-2 | SOURCE COMPLETE / OWNER VALIDATION PENDING | openDAW wheel/trackpad interaction ported and tested. |
+| KUI-3 | IMPLEMENTATION IN PROGRESS | dynamic time axis + ruler scrub replace static ruler/seek slider. |
 | KUI-4 | PLANNED | openDAW range navigator replaces zoom slider/native range navigation. |
 | KUI-5 | PLANNED | waveform, regions, ruler and playhead share exact range mapping. |
 | KUI-6 | PLANNED | fixed headers and horizontally navigable lanes are cleanly separated. |

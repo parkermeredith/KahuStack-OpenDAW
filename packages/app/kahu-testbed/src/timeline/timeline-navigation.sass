@@ -1,0 +1,32 @@
+// KUI-3 navigation strip styling follows the compact two-row openDAW timeline language.
+
+.timeline-navigation
+  position: relative
+  height: 2rem
+  flex: 0 0 2rem
+  background: var(--color-panel-background-dark)
+  border-bottom: 1px solid rgba(white, 0.06)
+
+.timeline-navigation-host
+  height: 2rem
+  flex: 0 0 2rem
+
+.kahu-time-axis
+  position: relative
+  width: 100%
+  height: 100%
+  overflow: hidden
+
+.kahu-time-axis-canvas
+  display: block
+  width: 100%
+  height: 100%
+  cursor: ew-resize
+
+.kahu-time-axis-cursor
+  position: absolute
+  top: 0
+  bottom: 0
+  width: 1px
+  background: var(--color-orange)
+  pointer-events: none
