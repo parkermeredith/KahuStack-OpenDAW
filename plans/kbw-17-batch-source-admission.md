@@ -8,6 +8,8 @@ Starting `main`: `88d7b3ffae6f62d1ec9bc944c911b6ec1d62c91c`
 
 Qualified source checkpoint: `15e88569b21aa304ec7437511aa44840547beca1`
 
+Current source tree after recovery commit: functionally identical to the qualified checkpoint for `workbench.tsx`; owner browser/audio qualification remains pending.
+
 ## Goal
 
 Make the reduced browser workbench practical for stem sets and session recovery by admitting multiple browser-local audio files in one action while preserving deterministic track creation, bounded decoding pressure, source-failure isolation, and existing Kahu runtime semantics.
@@ -68,7 +70,7 @@ GitHub Actions run `37003519117` passed the complete child source-validation seq
 - `npm run lint --workspace=@kahustack/opendaw-testbed` — PASS;
 - `npm run build:kahu` — PASS.
 
-The subsequent documentation-only KBW-16 closure does not change the qualified source behavior.
+The subsequent documentation-only KBW-16/17 closure changes do not alter the qualified source behavior. An accidental post-closure workbench replacement was immediately reverted by restoring the exact qualified `workbench.tsx` blob; no behavior from that failed edit is retained.
 
 ## Owner qualification still required
 
