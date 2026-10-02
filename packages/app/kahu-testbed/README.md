@@ -50,6 +50,11 @@ output meter, and versioned local session metadata. Browser-local source files m
 again after recovery; the session records their names and technical metadata rather than copying
 full PCM data.
 
+The AudioWorklet also routes the parent-owned level-match loudness profile and perceptual-spectrum
+observer through the same Rust-WASM artifact. The monitor uses those observations for A/B dry
+matching and spectrum display; native Web Audio analysis remains only the presentation fallback
+until the Kahu observer has produced its first snapshot.
+
 `perf:kahu` records generated artifact sizes for local comparisons. The current browser path decodes
 each selected source fully into an `AudioBuffer`; long-form streaming is intentionally deferred.
 

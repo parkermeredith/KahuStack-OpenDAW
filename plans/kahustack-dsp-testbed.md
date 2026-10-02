@@ -20,7 +20,7 @@ KBW hardens the KOD prototype into a compact KahuStack browser engineering host.
 general-purpose DAW and must continue to use KahuStack's canonical Rust DSP, generated manifest,
 registry, parameter semantics, runtime lifecycle, and Rust-WASM lineage.
 
-Current status: **KBW-0 through KBW-13 SOURCE COMPLETE / OWNER VALIDATION PENDING; KBW-14 ACTIVE**.
+Current status: **KBW-0 through KBW-14 SOURCE COMPLETE / OWNER VALIDATION PENDING**.
 
 KBW-0 baseline was rerun at parent `e6de30edbd1a2f3d116ee4bcc4472c0af2690743` and child
 `edda8be2af9674906b7e99a514159d3289df4e31`. KBW-1 is implemented at child `0708cdbba`:
@@ -31,11 +31,20 @@ control, scale, transition, and duplicate-ID cases.
 KBW-2 through KBW-6 are implemented at the local source checkpoint after child `6d8001d39`:
 the editor is manifest-driven, transport scheduling uses one shared audio epoch, regions carry
 timeline/source timing, waveform work is worker-built through a min/max pyramid, and timeline lanes
-use bounded viewport math. KBW-7 through KBW-13 are implemented in the current uncommitted slice:
+use bounded viewport math. KBW-7 through KBW-13 are implemented at child checkpoint `3618671a1`:
 the named reference runtime is retained, a consolidated Rust-WASM rack is exposed and used by the
-browser host, the scaling benchmark emits machine-readable rows, monitor comparison controls and
-version-two session migration are present, and the parent manifest remains the semantic authority.
+browser host, the scaling benchmark emits machine-readable rows, monitor comparison uses the
+parent-owned level-match meter and perceptual-spectrum observer, version-two session recovery
+reconstructs stable track/rack intent after source reselection, and the parent manifest remains the
+semantic authority.
 Long-form streaming remains explicitly deferred.
+
+KBW-14 closure work is source-complete at child `3618671a1`: prototype-era runtime names and hidden
+default Gain slots were removed, the generic worklet artifact is `kahu-worklet.js`, per-device reset
+uses the Rust rack node-reset ABI, persistent worklet errors reach the rack UI, unavailable modules
+remain visible during recovery, and the canonical meter/spectrum observers are checked in the staged
+runtime gate. Browser listening, AudioWorklet deadline timing, and source-reselection execution remain
+owner validation responsibilities.
 
 KBW-8 source benchmark snapshot (`npm run perf:kahu-rack`, Node 24, 48 kHz, stereo, 128-frame
 blocks) measured one consolidated AudioWorklet/WASM instance for every chain length. JS/WASM copy
@@ -60,10 +69,10 @@ KBW phase register:
 | KBW-8 | SOURCE COMPLETE / OWNER NODE BENCHMARK RERUN PENDING | 1/2/4/8/16 processor scaling benchmark. |
 | KBW-9 | SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING | Consolidated Rust rack runtime and AudioWorklet adapter. |
 | KBW-10 | SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING | Consolidated runtime selected as default; reference retained diagnostically. |
-| KBW-11 | SOURCE COMPLETE / OWNER LISTENING VALIDATION PENDING | DSP comparison, A/B, trims, metering, and spectrum controls. |
+| KBW-11 | SOURCE COMPLETE / OWNER LISTENING VALIDATION PENDING | DSP comparison, Rust-owned level-matched A/B, trims, Kahu meter, and perceptual spectrum controls. |
 | KBW-12 | SOURCE COMPLETE / OWNER RECOVERY VALIDATION PENDING | Versioned session model, validation, and v1 migration. |
 | KBW-13 | SOURCE COMPLETE / OWNER CROSS-HOST VALIDATION PENDING | Parent manifest/registry/parameter semantics remain shared. |
-| KBW-14 | ACTIVE | Prototype-debt, benchmark evidence, and documentation closure. |
+| KBW-14 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Prototype-debt audit, runtime naming, per-device reset/error closure, and documentation evidence. |
 
 Long-form streaming audio is explicitly deferred. KBW targets normal songs, stems, and reference
 tracks from seconds through tens of minutes; it does not authorize five-hour recording, streaming
