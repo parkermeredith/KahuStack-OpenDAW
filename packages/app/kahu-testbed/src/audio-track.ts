@@ -1,4 +1,4 @@
-// KBW-3/11/15 browser audio boundary: decodes admitted source audio, schedules it at a shared Web
+// KBW-3/11/15/18 browser audio boundary: decodes admitted source audio, schedules it at a shared Web
 // Audio epoch, and exposes bounded channel/monitor routing without owning DSP semantics.
 
 export type DecodedAudioFile = Readonly<{
@@ -20,11 +20,37 @@ export const decodeAudioFile = async (context: BaseAudioContext, file: File): Pr
     }
 }
 
+export const playbackEndOffsetSeconds = (
+    bufferDurationSeconds: number,
+    sourceOffsetSeconds: number,
+    durationSeconds?: number,
+): number => {
+    const bufferDuration = finiteNonNegative(bufferDurationSeconds)
+    const sourceOffset = Math.min(bufferDuration, finiteNonNegative(sourceOffsetSeconds))
+    if (durationSeconds === undefined || !Number.isFinite(durationSeconds) || durationSeconds <= 0) return bufferDuration
+    return Math.min(bufferDuration, sourceOffset + durationSeconds)
+}
+
+export const playbackPositionSeconds = (
+    sourceOffsetSeconds: number,
+    startTimeSeconds: number,
+    currentTimeSeconds: number,
+    endOffsetSeconds: number,
+): number => {
+    const startOffset = finiteNonNegative(sourceOffsetSeconds)
+    const endOffset = Math.max(startOffset, finiteNonNegative(endOffsetSeconds))
+    const elapsed = Number.isFinite(startTimeSeconds) && Number.isFinite(currentTimeSeconds)
+        ? Math.max(0, currentTimeSeconds - startTimeSeconds)
+        : 0
+    return Math.min(endOffset, startOffset + elapsed)
+}
+
 export class AudioTrackPlayer {
     private source: AudioBufferSourceNode | undefined
     private buffer: AudioBuffer | undefined
     private startedAtSeconds = 0
     private offsetSeconds = 0
+    private scheduledEndOffsetSeconds = 0
     private readonly gainNode: GainNode
     private readonly panNode: StereoPannerNode
     private readonly inputTrimNode: GainNode
@@ -46,12 +72,14 @@ export class AudioTrackPlayer {
         this.stop()
         this.buffer = buffer
         this.offsetSeconds = 0
+        this.scheduledEndOffsetSeconds = 0
     }
 
     clear(): void {
         this.stop()
         this.buffer = undefined
         this.offsetSeconds = 0
+        this.scheduledEndOffsetSeconds = 0
     }
 
     playAt(startTimeSeconds: number, offsetSeconds = this.offsetSeconds, durationSeconds?: number): boolean {
@@ -59,21 +87,23 @@ export class AudioTrackPlayer {
         if (buffer === undefined) {
             return false
         }
-        this.stop()
+        this.stopSource()
         const safeOffset = Math.min(buffer.duration, Math.max(0, offsetSeconds))
+        const safeDuration = durationSeconds === undefined || !Number.isFinite(durationSeconds)
+            ? undefined
+            : Math.min(Math.max(0, durationSeconds), Math.max(0, buffer.duration - safeOffset))
+        const endOffset = playbackEndOffsetSeconds(buffer.duration, safeOffset, safeDuration)
         const source = this.context.createBufferSource()
         source.buffer = buffer
         source.connect(this.gainNode)
         source.onended = () => {
             if (this.source === source) {
                 this.source = undefined
-                this.offsetSeconds = buffer.duration
+                this.offsetSeconds = endOffset
+                this.scheduledEndOffsetSeconds = endOffset
                 this.onEnded?.()
             }
         }
-        const safeDuration = durationSeconds === undefined
-            ? undefined
-            : Math.min(Math.max(0, durationSeconds), Math.max(0, buffer.duration - safeOffset))
         if (safeDuration === undefined || safeDuration <= 0) {
             source.start(startTimeSeconds, safeOffset)
         } else {
@@ -81,6 +111,7 @@ export class AudioTrackPlayer {
         }
         this.source = source
         this.offsetSeconds = safeOffset
+        this.scheduledEndOffsetSeconds = endOffset
         this.startedAtSeconds = startTimeSeconds
         return true
     }
@@ -97,25 +128,31 @@ export class AudioTrackPlayer {
     stop(): void {
         this.stopSource()
         this.offsetSeconds = 0
+        this.scheduledEndOffsetSeconds = 0
     }
 
     seek(offsetSeconds: number, startTimeSeconds?: number): void {
         const wasPlaying = this.source !== undefined
         this.offsetSeconds = this.clampOffset(offsetSeconds)
+        this.scheduledEndOffsetSeconds = this.offsetSeconds
         if (wasPlaying) {
             this.playAt(startTimeSeconds ?? this.context.currentTime + 0.01, this.offsetSeconds)
         }
     }
 
     positionSeconds(): number {
-        const buffer = this.buffer
-        if (buffer === undefined) {
+        if (this.buffer === undefined) {
             return 0
         }
         if (this.source === undefined) {
             return this.offsetSeconds
         }
-        return this.clampOffset(this.context.currentTime - this.startedAtSeconds)
+        return playbackPositionSeconds(
+            this.offsetSeconds,
+            this.startedAtSeconds,
+            this.context.currentTime,
+            this.scheduledEndOffsetSeconds,
+        )
     }
 
     hasAudio(): boolean {
@@ -152,6 +189,7 @@ export class AudioTrackPlayer {
     private stopSource(): void {
         const source = this.source
         this.source = undefined
+        this.scheduledEndOffsetSeconds = this.offsetSeconds
         if (source !== undefined) {
             source.onended = null
             source.stop()
@@ -163,3 +201,5 @@ export class AudioTrackPlayer {
         return Math.min(this.buffer?.duration ?? 0, Math.max(0, offsetSeconds))
     }
 }
+
+const finiteNonNegative = (value: number): number => Number.isFinite(value) ? Math.max(0, value) : 0
