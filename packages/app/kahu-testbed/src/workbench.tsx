@@ -42,6 +42,7 @@ import {
     SESSION_STORAGE_KEY,
     type TestbedSession,
 } from "./session-store"
+import {findRecoverableSessionTrack} from "./source-recovery"
 
 initializeColors(document.documentElement)
 document.title = TestbedShell.title
@@ -115,6 +116,7 @@ let kahuSpectrumBandCount = 0
 let timeAxisUpdatePosition: ((positionSeconds: number) => void) | undefined
 let activeRegionDrag: RegionDragSession | undefined
 let activeRegionDragCleanup: (() => void) | undefined
+let sourceAdmissionQueue: Promise<void> = Promise.resolve()
 let animationFrame = 0
 
 const createPauseIcon = (): HTMLElement => {
@@ -581,7 +583,7 @@ const createEmptyTimeline = (): HTMLElement => {
     const title = document.createElement("strong")
     title.textContent = "Drop audio here"
     const hint = document.createElement("small")
-    hint.textContent = "or use + to add a browser-decodable audio track"
+    hint.textContent = "or use + to add one or more browser-decodable audio tracks"
     copy.append(title, hint)
     const load = document.createElement("button")
     load.type = "button"
@@ -596,8 +598,8 @@ const createEmptyTimeline = (): HTMLElement => {
     drop.ondrop = event => {
         event.preventDefault()
         drop.classList.remove("dragging")
-        const file = event.dataTransfer?.files[0]
-        if (file !== undefined) void loadAudio(file)
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        if (files.length > 0) enqueueAudioFiles(files)
     }
     attachWheelScroll(drop, timelineController.range)
     drop.append(copy, load)
@@ -988,37 +990,62 @@ const updateSelectedRegion = (): void => {
     if (epoch !== undefined) playAllPlayers(epoch)
 }
 
-const loadAudio = async (file: File): Promise<void> => {
-    await decodeAudioFile(audioContext, file).then(track => {
-        const wasPlaying = transport.snapshot().isPlaying
-        const restored = pendingSession?.tracks.find(candidate => !recoveredTrackIds.has(candidate.id)
-            && candidate.fileName.toLocaleLowerCase() === file.name.toLocaleLowerCase())
-        const state = trackStore.add(track, restored)
-        if (restored !== undefined) {
-            recoveredTrackIds.add(restored.id)
-            if (pendingSession?.selectedTrackId === restored.id) trackStore.select(restored.id)
-        }
-        const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
-        player.load(track.buffer)
-        audioPlayers.set(state.id, player)
-        applyTrackGain(state)
-        rebuildTrackRack(state.id)
-        refreshTrackRows()
-        updateSelectedTrack()
-        refreshTrackDuration()
-        refreshRack()
-        if (pendingSession !== undefined) transport.setLoop(pendingSession.loop.enabled, pendingSession.loop.startSeconds, pendingSession.loop.endSeconds)
-        for (const device of rackStore.devicesFor(state.id)) {
-            if (device.moduleId !== undefined) void initializeRuntime(state.id, device.id, device.moduleId)
-        }
-        const pendingSources = pendingSession?.tracks.length ?? 0
-        if (pendingSources > 0 && recoveredTrackIds.size >= pendingSources) engineStatus?.replaceChildren("SESSION SOURCES RESTORED")
-        if (wasPlaying) {
-            const epoch = transport.reschedule()
-            if (epoch !== undefined) playAllPlayers(epoch)
-        }
-        restartTransportRefresh()
-    }).catch(() => engineStatus?.replaceChildren(`UNABLE TO DECODE · ${file.name}`))
+const loadAudio = async (file: File): Promise<boolean> => decodeAudioFile(audioContext, file).then(track => {
+    const restored = findRecoverableSessionTrack(pendingSession?.tracks ?? [], recoveredTrackIds, track)
+    const state = trackStore.add(track, restored)
+    if (restored !== undefined) {
+        recoveredTrackIds.add(restored.id)
+        if (pendingSession?.selectedTrackId === restored.id) trackStore.select(restored.id)
+    }
+    const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
+    player.load(track.buffer)
+    audioPlayers.set(state.id, player)
+    applyTrackGain(state)
+    rebuildTrackRack(state.id)
+    refreshTrackRows()
+    updateSelectedTrack()
+    refreshTrackDuration()
+    refreshRack()
+    if (pendingSession !== undefined) transport.setLoop(pendingSession.loop.enabled, pendingSession.loop.startSeconds, pendingSession.loop.endSeconds)
+    for (const device of rackStore.devicesFor(state.id)) {
+        if (device.moduleId !== undefined) void initializeRuntime(state.id, device.id, device.moduleId)
+    }
+    return true
+}).catch(() => {
+    engineStatus?.replaceChildren(`UNABLE TO DECODE · ${file.name}`)
+    return false
+})
+
+const loadAudioFiles = async (files: ReadonlyArray<File>): Promise<void> => {
+    if (files.length === 0) return
+    const wasPlaying = transport.snapshot().isPlaying
+    const recoveredBefore = recoveredTrackIds.size
+    let loaded = 0
+    let failed = 0
+    for (const file of files) {
+        if (await loadAudio(file)) loaded += 1
+        else failed += 1
+    }
+    if (loaded > 0 && wasPlaying) {
+        const epoch = transport.reschedule()
+        if (epoch !== undefined) playAllPlayers(epoch)
+    }
+    const recovered = recoveredTrackIds.size - recoveredBefore
+    const pendingSources = pendingSession?.tracks.length ?? 0
+    const remaining = Math.max(0, pendingSources - recoveredTrackIds.size)
+    const status = [`${loaded} LOADED`]
+    if (recovered > 0) status.push(`${recovered} RECOVERED`)
+    if (failed > 0) status.push(`${failed} FAILED`)
+    if (remaining > 0) status.push(`${remaining} SESSION SOURCES MISSING`)
+    engineStatus?.replaceChildren(pendingSources > 0 && remaining === 0 && failed === 0
+        ? `SESSION SOURCES RESTORED · ${loaded} LOADED`
+        : `AUDIO BATCH · ${status.join(" · ")}`)
+    restartTransportRefresh()
+}
+
+const enqueueAudioFiles = (files: ReadonlyArray<File>): void => {
+    if (files.length === 0) return
+    sourceAdmissionQueue = sourceAdmissionQueue.then(() => loadAudioFiles(files))
 }
 
 const toggleTransport = async (): Promise<void> => {
@@ -1109,15 +1136,15 @@ replaceChildren(document.body, IconLibrary(), (
                 <div className="timeline-header-grid">
                     <div className="panel-heading track-column-heading">
                         <span>TRACKS</span>
-                        <button className="icon-button" type="button" aria-label="Add track" onInit={element => {
+                        <button className="icon-button" type="button" aria-label="Add tracks" onInit={element => {
                             element.replaceChildren(Icon({symbol: IconSymbol.Add, className: "opendaw-button-icon"}))
                             element.onclick = () => fileInput?.click()
                         }}/>
-                        <input className="hidden" type="file" accept="audio/*" aria-label="Choose source audio" onInit={element => {
+                        <input className="hidden" type="file" accept="audio/*" multiple aria-label="Choose source audio tracks" onInit={element => {
                             fileInput = element
                             element.onchange = () => {
-                                const file = element.files?.[0]
-                                if (file !== undefined) void loadAudio(file)
+                                const files = Array.from(element.files ?? [])
+                                if (files.length > 0) enqueueAudioFiles(files)
                                 element.value = ""
                             }
                         }}/>
