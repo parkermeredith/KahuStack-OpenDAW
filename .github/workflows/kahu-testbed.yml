@@ -46,9 +46,20 @@ jobs:
             --filter=@opendaw/studio-icons \
             --filter=@opendaw/studio-core
 
-      - name: Validate Kahu browser workbench source
-        run: |
-          npm run typecheck:kahu
-          npm run test:kahu
-          npm run lint --workspace=@kahustack/opendaw-testbed
-          npm run build:kahu
+      - name: Typecheck Kahu workbench
+        run: npm run typecheck:kahu
+
+      - name: Test Kahu workbench
+        run: npm run test:kahu
+
+      - name: Lint Kahu workbench
+        run: npm run lint --workspace=@kahustack/opendaw-testbed
+
+      - name: Build Kahu workbench
+        run: npm run build:kahu
+
+      - name: Check staged Kahu runtime
+        run: npm run check:kahu-runtime
+
+      - name: Benchmark consolidated Kahu rack
+        run: npm run perf:kahu-rack
