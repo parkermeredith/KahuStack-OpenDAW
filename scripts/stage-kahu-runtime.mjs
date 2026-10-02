@@ -18,6 +18,9 @@ const outputRoot = resolve(packageRoot, "public/kahu-runtime")
 const generatedSourceRoot = resolve(packageRoot, "src/generated")
 const canonicalTypesSource = resolve(parentRoot, "apps/testbench/src/types.ts")
 const canonicalRuntimeSource = resolve(parentRoot, "apps/testbench/src/audio/LibraryManifestRuntime.ts")
+const snapshotRoot = resolve(scriptDirectory, "kahu-contract-snapshot")
+const snapshotTypesSource = resolve(snapshotRoot, "types.ts")
+const snapshotRuntimeSource = resolve(snapshotRoot, "LibraryManifestRuntime.ts")
 
 const copyWithRetry = async (source, destination) => {
     for (let attempt = 0; ; attempt += 1) {
@@ -31,17 +34,35 @@ const copyWithRetry = async (source, destination) => {
     }
 }
 
-if (!existsSync(canonicalTypesSource) || !existsSync(canonicalRuntimeSource)) {
-    console.warn("Canonical Kahu manifest contract sources are unavailable; set KAHU_DSP_ROOT to the parent repository.")
-} else {
+const stageManifestContract = async (typesSource, runtimeSource, importPattern, sourceLabel) => {
     await mkdir(generatedSourceRoot, {recursive: true})
-    await copyWithRetry(canonicalTypesSource, resolve(generatedSourceRoot, "kahu-manifest-types.ts"))
-    const runtimeSource = await readFile(canonicalRuntimeSource, "utf8")
+    await copyWithRetry(typesSource, resolve(generatedSourceRoot, "kahu-manifest-types.ts"))
+    const runtimeSourceText = await readFile(runtimeSource, "utf8")
     await writeFile(
         resolve(generatedSourceRoot, "kahu-manifest-runtime.ts"),
-        runtimeSource.replace("from '../types.js'", "from './kahu-manifest-types.js'"),
+        runtimeSourceText.replace(importPattern, "from './kahu-manifest-types.js'"),
         "utf8",
     )
+    console.log(`Staged Kahu manifest contract from ${sourceLabel}`)
+}
+
+if (existsSync(canonicalTypesSource) && existsSync(canonicalRuntimeSource)) {
+    await stageManifestContract(
+        canonicalTypesSource,
+        canonicalRuntimeSource,
+        "from '../types.js'",
+        parentRoot,
+    )
+} else if (existsSync(snapshotTypesSource) && existsSync(snapshotRuntimeSource)) {
+    await stageManifestContract(
+        snapshotTypesSource,
+        snapshotRuntimeSource,
+        "from './types.js'",
+        "the pinned standalone snapshot",
+    )
+    console.warn("Canonical parent manifest sources are unavailable; using the pinned generated contract snapshot.")
+} else {
+    console.warn("Canonical Kahu manifest contract sources are unavailable; set KAHU_DSP_ROOT to the parent repository.")
 }
 
 if (!existsSync(wasmSource) || !existsSync(manifestSource)) {
