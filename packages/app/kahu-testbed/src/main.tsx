@@ -2,6 +2,7 @@
 
 import "./main.sass"
 import "./timeline/timeline-navigation.sass"
+import "./timeline/timeline-range-slider.sass"
 // The classic TypeScript JSX transform consumes createElement in generated output.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
 import {replaceChildren, createElement} from "@opendaw/lib-jsx"
@@ -15,6 +16,7 @@ import {planRegionPlayback} from "./region"
 import {TimelineController} from "./timeline/timeline-controller"
 import {attachWheelScroll} from "./timeline/wheel-scroll"
 import {createTimelineNavigation} from "./timeline/timeline-navigation"
+import {createTimelineRangeSlider} from "./timeline/timeline-range-slider"
 import {RackStore} from "./rack-store"
 import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime, type KahuAnalysisTelemetry} from "./kahu-runtime"
 import {
@@ -65,7 +67,6 @@ let timelineStartInput: HTMLInputElement | undefined
 let sourceOffsetInput: HTMLInputElement | undefined
 let timelineLaneList: HTMLElement | undefined
 let timelineScroll: HTMLElement | undefined
-let timelineZoomInput: HTMLInputElement | undefined
 let playButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
@@ -985,16 +986,6 @@ replaceChildren(document.body, (
                         </label>
                     </div>
                     <div className="toolbar-spacer"/>
-                    <label className="zoom-control">ZOOM
-                        <input type="range" min="1" max="4" step="0.25" value="1" aria-label="Timeline zoom"
-                               onInit={element => element.oninput = () => {
-                                   timelineZoomInput = element
-                                   timelineController.setZoom(Number(element.value))
-                                   refreshTimelineLanes()
-                                   const track = trackStore.selected()
-                                   if (track !== undefined) drawWaveform(track)
-                               }}/>
-                    </label>
                     <span className="timeline-note">Audio track · Web Audio runtime</span>
                 </div>
                 <div className="timeline-canvas" onInit={element => {
@@ -1065,6 +1056,9 @@ replaceChildren(document.body, (
                     </div>
                     <div className="playhead" aria-hidden="true" onInit={element => playhead = element}/>
                 </div>
+                <div className="timeline-range-slider-host" onInit={element => {
+                    element.append(createTimelineRangeSlider(timelineController.range))
+                }}/>
             </section>
         </section>
         <section className="rack-panel" aria-label="Kahu rack">
@@ -1139,10 +1133,6 @@ refreshTimelineLanes()
 refreshTransport()
 timelineController.range.subscribe(() => {
     const track = trackStore.selected()
-    const snapshot = timelineController.snapshot()
-    if (timelineZoomInput !== undefined && document.activeElement !== timelineZoomInput) {
-        timelineZoomInput.value = Math.min(4, snapshot.zoom).toFixed(2)
-    }
     refreshTimelineLanes()
     refreshTransport()
     if (track !== undefined) drawWaveform(track)
