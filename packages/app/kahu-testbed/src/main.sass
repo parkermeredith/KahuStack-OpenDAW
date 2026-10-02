@@ -17,6 +17,7 @@ html, body
   height: 100%
   margin: 0
   overflow: hidden
+  overscroll-behavior: none
   color: var(--color-bright)
   background: var(--color-background)
   font-family: Rubik, sans-serif
@@ -336,11 +337,12 @@ button:disabled
   position: relative
   flex: 1 1 auto
   min-height: 3rem
-  overflow-x: auto
+  overflow-x: hidden
   overflow-y: hidden
 
 .timeline-content
   position: relative
+  width: 100%
   min-width: 100%
   min-height: 100%
 
@@ -487,6 +489,9 @@ button:disabled
   width: 1px
   background: var(--color-orange)
   pointer-events: none
+
+  &.outside-range
+    visibility: hidden
 
 .seek-slider
   position: absolute

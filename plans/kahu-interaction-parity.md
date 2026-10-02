@@ -1,6 +1,6 @@
 # Kahu Interaction Parity — OpenDAW Timeline and Control Convergence Plan
 
-Status: **KUI-0 SOURCE COMPLETE / KUI-1 IMPLEMENTATION IN PROGRESS**  
+Status: **KUI-1 SOURCE COMPLETE / KUI-2 IMPLEMENTATION IN PROGRESS**  
 Program: **KUI — Kahu UI Interaction Parity**  
 Date: 2026-10-01  
 Repository: `parkermeredith/KahuStack-OpenDAW`  
@@ -69,6 +69,13 @@ The current visible-control inventory is the implementation contract for KUI-9:
 
 KUI-0 is documentation-only. No runtime or interaction behavior is considered complete from this
 inventory; owner browser qualification remains pending.
+
+KUI-1 implementation evidence: `TimelineController` owns one published `TimelineRange` configured
+in seconds with a 0.05-second minimum. Kahu region, playhead, seek, and selected-waveform geometry
+now consume that range; the enlarged DOM strip and native horizontal scrollbar are no longer the
+viewport authority. The old `TimelineViewport` source and test were removed after the new focused
+range tests passed. Legacy `zoom`/`scrollFraction` conversion is retained only at the existing
+session boundary until KUI-7 performs the versioned normalized-range migration.
 
 ---
 
@@ -1160,8 +1167,8 @@ Use this table during implementation and update statuses only with evidence.
 | Phase | Initial status | Closure requirement |
 | --- | --- | --- |
 | KUI-0 | PLANNED | Baseline + complete control parity inventory checked in. |
-| KUI-1 | PLANNED | `TimelineRange` is sole horizontal range authority. |
-| KUI-2 | PLANNED | openDAW wheel/trackpad interaction ported and tested. |
+| KUI-1 | SOURCE COMPLETE / OWNER VALIDATION PENDING | `TimelineRange` is sole horizontal range authority. |
+| KUI-2 | IMPLEMENTATION IN PROGRESS | openDAW wheel/trackpad interaction ported and tested. |
 | KUI-3 | PLANNED | dynamic time axis + ruler scrub replace static ruler/seek slider. |
 | KUI-4 | PLANNED | openDAW range navigator replaces zoom slider/native range navigation. |
 | KUI-5 | PLANNED | waveform, regions, ruler and playhead share exact range mapping. |

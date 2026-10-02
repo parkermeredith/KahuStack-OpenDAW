@@ -19,8 +19,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@opendaw/lib-dom": "^0.0.91",
     "@opendaw/lib-jsx": "^0.0.93",
-    "@opendaw/studio-enums": "^0.1.4"
+    "@opendaw/lib-std": "^0.0.86",
+    "@opendaw/studio-core": "^0.2.7",
+    "@opendaw/studio-enums": "^0.1.4",
+    "@opendaw/studio-icons": "^0.0.3"
   },
   "devDependencies": {
     "@opendaw/eslint-config": "^0.0.28",

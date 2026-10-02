@@ -11,7 +11,7 @@ import {AudioTrackPlayer, decodeAudioFile} from "./audio-track"
 import {buildWaveformPyramidAsync, extractVisibleWaveformPeaks, WaveformPyramid} from "./waveform"
 import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
-import {TimelineViewport} from "./timeline"
+import {TimelineController} from "./timeline/timeline-controller"
 import {RackStore} from "./rack-store"
 import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime, type KahuAnalysisTelemetry} from "./kahu-runtime"
 import {
@@ -41,7 +41,7 @@ dryCompare.connect(outputTrim)
 outputTrim.connect(analyser)
 analyser.connect(audioContext.destination)
 const transport = new Transport(() => audioContext.currentTime)
-const timelineViewport = new TimelineViewport()
+const timelineController = new TimelineController()
 const trackStore = new TrackStore()
 const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
@@ -63,7 +63,7 @@ let timelineStartInput: HTMLInputElement | undefined
 let sourceOffsetInput: HTMLInputElement | undefined
 let timelineLaneList: HTMLElement | undefined
 let timelineScroll: HTMLElement | undefined
-let timelineContent: HTMLElement | undefined
+let timelineZoomInput: HTMLInputElement | undefined
 let playButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
@@ -103,7 +103,6 @@ const setOutputTrim = (): void => {
 setMonitorComparison()
 setOutputTrim()
 let animationFrame = 0
-let waveformZoom = 1
 
 const applyKahuAnalysis = (trackId: string, telemetry: KahuAnalysisTelemetry): void => {
     if (trackStore.selected()?.id !== trackId) return
@@ -123,7 +122,7 @@ const applyKahuAnalysis = (trackId: string, telemetry: KahuAnalysisTelemetry): v
 
 const saveSession = (): void => {
     try {
-        const viewport = timelineViewport.snapshot()
+        const viewport = timelineController.snapshot()
         localStorage.setItem(
             SESSION_STORAGE_KEY,
             encodeSession(createSession(trackStore.all(), rackStore, trackStore.selected()?.id, viewport)),
@@ -144,8 +143,8 @@ const recoverSession = (): void => {
         const session = decodeSession(serialized)
         pendingSession = session
         recoveredTrackIds.clear()
-        timelineViewport.setZoom(session.viewport.zoom)
-        timelineViewport.setScrollFraction(session.viewport.scrollFraction)
+        timelineController.setZoom(session.viewport.zoom)
+        timelineController.setScrollFraction(session.viewport.scrollFraction)
         if (session.selectedTrackId !== undefined) trackStore.select(session.selectedTrackId)
         const recovery = rackStore.restoreRecoverable(session.rack)
         refreshRack()
@@ -173,7 +172,13 @@ const refreshTransport = (): void => {
     musicalReadout?.replaceChildren(snapshot.musicalPosition)
     playButton?.replaceChildren(snapshot.isPlaying ? "Ⅱ" : "▶")
     playButton?.setAttribute("aria-label", snapshot.isPlaying ? "Pause" : "Play")
-    playhead?.style.setProperty("left", `${timelineViewport.positionPercent(snapshot.positionSeconds)}%`)
+    const playheadX = timelineController.positionX(snapshot.positionSeconds)
+    playhead?.style.setProperty("left", `${playheadX}px`)
+    playhead?.classList.toggle(
+        "outside-range",
+        snapshot.positionSeconds < timelineController.range.unitMin
+            || snapshot.positionSeconds > timelineController.range.unitMax,
+    )
     if (seekInput !== undefined) {
         seekInput.value = snapshot.positionSeconds.toString()
         seekInput.max = snapshot.durationSeconds.toString()
@@ -263,16 +268,32 @@ const drawWaveform = (track: TrackState): void => {
         canvas.width = physicalWidth
         canvas.height = physicalHeight
     }
-    const visibleSamples = Math.max(1, pyramid.sampleCount / waveformZoom)
-    const peaks = extractVisibleWaveformPeaks(pyramid, 0, visibleSamples, physicalWidth)
+    const regionStart = track.region.timelineStartSeconds
+    const regionEnd = regionStart + track.region.durationSeconds
+    const visibleStart = timelineController.range.unitMin
+    const visibleEnd = timelineController.range.unitMax
+    const overlapStart = Math.max(regionStart, visibleStart)
+    const overlapEnd = Math.min(regionEnd, visibleEnd)
+    context.clearRect(0, 0, canvas.width, physicalHeight)
+    if (overlapEnd <= overlapStart) return
+    const sourceStartSeconds = track.region.sourceOffsetSeconds + (overlapStart - regionStart)
+    const sourceEndSeconds = track.region.sourceOffsetSeconds + (overlapEnd - regionStart)
+    const sourceStart = sourceStartSeconds * track.audio.sampleRate
+    const sourceEnd = sourceEndSeconds * track.audio.sampleRate
+    const left = timelineController.range.unitToX(overlapStart)
+    const right = timelineController.range.unitToX(overlapEnd)
+    const overlapWidth = Math.max(1, Math.ceil(right - left))
+    const peaks = extractVisibleWaveformPeaks(pyramid, sourceStart, sourceEnd, Math.max(1, Math.ceil(overlapWidth * devicePixelRatio)))
     const height = physicalHeight
     const midpoint = height / 2
-    context.clearRect(0, 0, canvas.width, height)
     context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-green")
+    const pixelOffset = Math.floor(left * devicePixelRatio)
     for (let column = 0; column < peaks.minimum.length; column++) {
+        const canvasColumn = pixelOffset + column
+        if (canvasColumn < 0 || canvasColumn >= physicalWidth) continue
         const top = midpoint - peaks.maximum[column] * midpoint * 0.85
         const bottom = midpoint - peaks.minimum[column] * midpoint * 0.85
-        context.fillRect(column, top, 1, Math.max(1, bottom - top))
+        context.fillRect(canvasColumn, top, 1, Math.max(1, bottom - top))
     }
 }
 
@@ -307,7 +328,8 @@ const refreshTrackPlayers = (): void => {
 
 const refreshTrackDuration = (): void => {
     const duration = trackStore.durationSeconds()
-    timelineViewport.setDuration(duration > 0 ? duration : DEFAULT_TRANSPORT_DURATION_SECONDS)
+    timelineController.setDuration(duration > 0 ? duration : DEFAULT_TRANSPORT_DURATION_SECONDS)
+    if (timelineScroll !== undefined) timelineController.setWidth(timelineScroll.clientWidth)
     transport.setDuration(duration > 0 ? duration : DEFAULT_TRANSPORT_DURATION_SECONDS)
     refreshTimelineLanes()
     restartTransportRefresh()
@@ -362,9 +384,9 @@ const refreshTimelineLanes = (): void => {
         const region = document.createElement("button")
         region.type = "button"
         region.className = "timeline-region"
-        const style = timelineViewport.regionStyle(track.region.timelineStartSeconds, track.region.durationSeconds)
-        region.style.left = `${style.leftPercent}%`
-        region.style.width = `${style.widthPercent}%`
+        const style = timelineController.regionStyle(track.region.timelineStartSeconds, track.region.durationSeconds)
+        region.style.left = `${style.left}px`
+        region.style.width = `${style.width}px`
         region.textContent = `${track.name} · ${track.audio.durationSeconds.toFixed(1)} s`
         region.onclick = event => {
             event.stopPropagation()
@@ -966,14 +988,8 @@ replaceChildren(document.body, (
                     <label className="zoom-control">ZOOM
                         <input type="range" min="1" max="4" step="0.25" value="1" aria-label="Timeline zoom"
                                onInit={element => element.oninput = () => {
-                                   waveformZoom = Number(element.value)
-                                   timelineViewport.setZoom(waveformZoom)
-                                   if (timelineContent !== undefined) {
-                                       timelineContent.style.width = `${timelineViewport.contentWidthPercent()}%`
-                                   }
-                                   if (timelineViewport.snapshot().zoom === 1 && timelineScroll !== undefined) {
-                                       timelineScroll.scrollLeft = 0
-                                   }
+                                   timelineZoomInput = element
+                                   timelineController.setZoom(Number(element.value))
                                    refreshTimelineLanes()
                                    const track = trackStore.selected()
                                    if (track !== undefined) drawWaveform(track)
@@ -982,10 +998,11 @@ replaceChildren(document.body, (
                     <span className="timeline-note">Audio track · Web Audio runtime</span>
                 </div>
                 <div className="timeline-canvas" onInit={element => {
+                    timelineController.setWidth(element.clientWidth)
                     element.onclick = event => {
                         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return
                         const bounds = element.getBoundingClientRect()
-                        seekFromInput(timelineViewport.secondsAtX(event.clientX - bounds.left, bounds.width).toString())
+                        seekFromInput(timelineController.secondsAtX(event.clientX - bounds.left, bounds.width).toString())
                     }
                 }}>
                     <div className="ruler" aria-hidden="true">
@@ -1033,16 +1050,9 @@ replaceChildren(document.body, (
                     </div>
                     <div className="timeline-scroll" onInit={element => {
                         timelineScroll = element
-                        element.onscroll = () => {
-                            const maximum = element.scrollWidth - element.clientWidth
-                            timelineViewport.setScrollFraction(maximum > 0 ? element.scrollLeft / maximum : 0)
-                            refreshTransport()
-                        }
+                        timelineController.setWidth(element.clientWidth)
                     }}>
-                        <div className="timeline-content" onInit={element => {
-                            timelineContent = element
-                            element.style.width = `${timelineViewport.contentWidthPercent()}%`
-                        }}>
+                        <div className="timeline-content">
                             <div className="timeline-lane-list" onInit={element => timelineLaneList = element}/>
                         </div>
                     </div>
@@ -1126,4 +1136,22 @@ updateSelectedTrack()
 refreshRack()
 refreshTimelineLanes()
 refreshTransport()
+timelineController.range.subscribe(() => {
+    const track = trackStore.selected()
+    const snapshot = timelineController.snapshot()
+    if (timelineZoomInput !== undefined && document.activeElement !== timelineZoomInput) {
+        timelineZoomInput.value = Math.min(4, snapshot.zoom).toFixed(2)
+    }
+    refreshTimelineLanes()
+    refreshTransport()
+    if (track !== undefined) drawWaveform(track)
+})
+if (timelineScroll !== undefined) {
+    const observer = new ResizeObserver(() => {
+        timelineController.setWidth(timelineScroll?.clientWidth ?? 0)
+        const track = trackStore.selected()
+        if (track !== undefined) drawWaveform(track)
+    })
+    observer.observe(timelineScroll)
+}
 void loadCatalog()
