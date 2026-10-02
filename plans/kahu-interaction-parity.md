@@ -1,16 +1,74 @@
 # Kahu Interaction Parity — OpenDAW Timeline and Control Convergence Plan
 
-Status: **PLANNED / IMPLEMENTATION NOT STARTED**  
+Status: **KUI-0 SOURCE COMPLETE / KUI-1 IMPLEMENTATION IN PROGRESS**  
 Program: **KUI — Kahu UI Interaction Parity**  
 Date: 2026-10-01  
 Repository: `parkermeredith/KahuStack-OpenDAW`  
-Plan baseline: child `4ff1dd31462dd189a58eea5e3266c19b8bf59b76`, parent `parkermeredith/kahustack-dsp` `b9c99673ca84929cb1c2de6309fea196f611b84e`
+Plan baseline: child `f16ea8872fa7f5e36f15db2326ff8255634e91b4`, parent `parkermeredith/kahustack-dsp` `27cd36e65f9a22be2cf684b34e9c0f8c950b0019`
 
 This plan follows the KBW v2 source program in `plans/kahustack-dsp-testbed.md`.
 
 The objective is not to add more DAW features. The objective is to make the Kahu browser workbench use the same timeline navigation and control interaction model as openDAW wherever Kahu needs an equivalent control, while keeping Kahu's DSP/runtime/session semantics authoritative.
 
 The workbench should feel like a reduced openDAW engineering surface, not a custom DAW that merely uses openDAW colors.
+
+## KUI-0 evidence — synchronized baseline and parity inventory
+
+The required pre-change synchronization was completed on 2026-10-01.
+
+```text
+parent starting HEAD: 27cd36e65f9a22be2cf684b34e9c0f8c950b0019
+child starting HEAD:  f16ea8872fa7f5e36f15db2326ff8255634e91b4
+parent main == origin/main: yes
+child main == origin/main: yes
+parent worktree: clean
+child worktree: clean
+parent submodule pin: f16ea8872fa7f5e36f15db2326ff8255634e91b4
+```
+
+The current Kahu baseline was run before implementation. All required commands passed:
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck:kahu` | PASS |
+| `npm run test:kahu` | PASS — 10 files / 33 tests |
+| `npm run build:kahu` | PASS |
+| `npm run check:kahu-runtime` | PASS — 44 modules, 1,471,242-byte WASM artifact |
+| `npm run perf:kahu-rack` | PASS — KBW-8 Node/WASM comparison emitted |
+
+The current visible-control inventory is the implementation contract for KUI-9:
+
+| Visible control | Current Kahu implementation | openDAW reference | Final Kahu interaction | Phase |
+| --- | --- | --- | --- | --- |
+| Play/pause | Unicode button in `main.tsx` | `TransportGroup.tsx`, `Button.tsx`, `Icon.tsx` | persistent openDAW-style icon button; Space | KUI-8/9 |
+| Stop | Unicode button in `main.tsx` | `TransportGroup.tsx`, `Button.tsx`, `Icon.tsx` | icon button; Period | KUI-8/9 |
+| Loop | absent | `TransportGroup.tsx`, `Checkbox.tsx` | persistent real transport toggle; Shift+L | KUI-8/9 |
+| Follow | absent | `TimelineHeader.tsx`, `Checkbox.tsx` | persistent range-follow toggle; Shift+F | KUI-8/9 |
+| Time readout | spans in `main.tsx` | `TimeStateDisplay.tsx` | range-independent transport readout | KUI-8 |
+| Typed position | native number input | `ParameterLabel.tsx`, value controls | precision number input; keyboard-safe | KUI-8/9 |
+| Region start | native number input | `RegionsArea.tsx`, `RegionMoveModifier.ts` | inspector precision field plus direct body drag | KUI-7 |
+| Source offset | native number input | region content timing precedent | inspector precision field; preserved during body drag | KUI-7 |
+| Current zoom | native `.zoom-control` range input and `waveformZoom` | `TimelineRange.ts`, `TimelineRangeSlider.tsx` | shared `TimelineRange` plus range navigator | KUI-1/4 |
+| Current seek | native `.seek-slider` range input and canvas click | `TimeAxis.tsx` | dynamic ruler scrub; typed position remains precision path | KUI-3 |
+| Track mute | text `M` button | `IconSymbol.Mute`, `Checkbox.tsx` | persistent icon toggle | KUI-9 |
+| Track solo | text `S` button | `IconSymbol.Solo`, `Checkbox.tsx` | persistent icon toggle | KUI-9 |
+| Track gain | native range input | `ParameterLabelKnob.tsx`, `RelativeUnitValueDragging.tsx` | compact value drag with Kahu gain semantics | KUI-9 |
+| Add/remove track | `+` and `×` buttons | `Button.tsx`, `IconSymbol.Add/Close` | icon buttons | KUI-9 |
+| Processor add | select plus `ADD SLOT` | `Button.tsx`, device controls | compact selector plus action button | KUI-9 |
+| Processor bypass | text `BYP` button | `Checkbox.tsx`, `IconSymbol.Bypass` equivalent if available | persistent toggle | KUI-9 |
+| Processor reset | text `RST` button | `Button.tsx`, `IconSymbol.Reset` equivalent if available | action button | KUI-9 |
+| Processor reorder | text chevrons | `Button.tsx`, `IconSymbol.ArrowLeft/ArrowRight` | icon action buttons | KUI-9 |
+| Processor remove | text `×` button | `Button.tsx`, `IconSymbol.Close` | icon action button | KUI-9 |
+| Parameter continuous | native range input | `ParameterLabel.tsx`, `ParameterLabelKnob.tsx` | value drag/label; manifest mapping unchanged | KUI-9 |
+| Parameter boolean | native checkbox | `Checkbox.tsx` | openDAW-style persistent toggle | KUI-9 |
+| Parameter enum | native select | compact device selector precedent | discrete selector; manifest enum mapping unchanged | KUI-9 |
+| Input trim | native footer range input | value dragging precedent | compact value control; dB semantics unchanged | KUI-9 |
+| Output trim | native footer range input | value dragging precedent | compact value control; dB semantics unchanged | KUI-9 |
+| Bypass all | text button | `Checkbox.tsx` / `Button.tsx` | persistent toggle/action with active state | KUI-9 |
+| A/B compare | text `PROC`/`DRY` button | `Checkbox.tsx` | persistent binary toggle | KUI-9 |
+
+KUI-0 is documentation-only. No runtime or interaction behavior is considered complete from this
+inventory; owner browser qualification remains pending.
 
 ---
 
