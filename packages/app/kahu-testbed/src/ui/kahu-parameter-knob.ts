@@ -85,6 +85,8 @@ export const createKahuParameterKnob = (options: KahuParameterKnobOptions): HTML
     readout.setAttribute("aria-label", `${parameter.name} exact value`)
     root.append(label, button, readout)
     let previewValue: number | undefined
+    let pendingValue: number | undefined
+    let animationFrame: number | undefined
     const currentValue = (): number => previewValue ?? options.getValue()
     const render = (value: number): void => {
         const safe = quantizeParameterValue(parameter, value)
@@ -95,8 +97,24 @@ export const createKahuParameterKnob = (options: KahuParameterKnobOptions): HTML
         button.setAttribute("aria-valuetext", formatParameterValue(parameter, safe))
         if (document.activeElement !== readout) readout.value = formatParameterValue(parameter, safe)
     }
+    const clearScheduled = (): void => {
+        if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
+        animationFrame = undefined
+        pendingValue = undefined
+    }
+    const scheduleRealtimeValue = (value: number): void => {
+        pendingValue = value
+        if (animationFrame !== undefined) return
+        animationFrame = requestAnimationFrame(() => {
+            animationFrame = undefined
+            const pending = pendingValue
+            pendingValue = undefined
+            if (pending !== undefined) options.setValue(pending)
+        })
+    }
     const commit = (value: number): void => {
         const safe = quantizeParameterValue(parameter, value)
+        clearScheduled()
         previewValue = undefined
         options.setValue(safe)
         render(safe)
@@ -106,7 +124,7 @@ export const createKahuParameterKnob = (options: KahuParameterKnobOptions): HTML
         modify(value: unitValue): void {
             const next = unitToValue(parameter, value)
             previewValue = next
-            if (parameter.automation !== "reprepare") options.setValue(next)
+            if (parameter.automation !== "reprepare") scheduleRealtimeValue(next)
             render(next)
         }
         finalise(_previous: unitValue, value: unitValue): void {
@@ -114,6 +132,7 @@ export const createKahuParameterKnob = (options: KahuParameterKnobOptions): HTML
             commit(unitToValue(parameter, value))
         }
         cancel(): void {
+            clearScheduled()
             previewValue = undefined
             render(options.getValue())
         }
@@ -158,6 +177,7 @@ export const createKahuParameterKnob = (options: KahuParameterKnobOptions): HTML
             readout.blur()
         } else if (event.key === "Escape") {
             event.preventDefault()
+            clearScheduled()
             previewValue = undefined
             render(options.getValue())
             readout.blur()
