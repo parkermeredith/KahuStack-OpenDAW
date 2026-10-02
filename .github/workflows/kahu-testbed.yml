@@ -26,11 +26,15 @@ jobs:
         with:
           path: child
 
-      - name: Checkout canonical KahuStack DSP
-        uses: actions/checkout@v4
-        with:
-          repository: parkermeredith/kahustack-dsp
-          path: kahustack-dsp
+      - name: Stage canonical KahuStack DSP contracts
+        run: |
+          mkdir -p kahustack-dsp/apps/testbench/src/audio kahustack-dsp/apps/testbench/public
+          curl -fL https://raw.githubusercontent.com/parkermeredith/kahustack-dsp/main/apps/testbench/src/types.ts \
+            -o kahustack-dsp/apps/testbench/src/types.ts
+          curl -fL https://raw.githubusercontent.com/parkermeredith/kahustack-dsp/main/apps/testbench/src/audio/LibraryManifestRuntime.ts \
+            -o kahustack-dsp/apps/testbench/src/audio/LibraryManifestRuntime.ts
+          curl -fL https://raw.githubusercontent.com/parkermeredith/kahustack-dsp/main/apps/testbench/public/library-manifest.json \
+            -o kahustack-dsp/apps/testbench/public/library-manifest.json
 
       - name: Setup Node
         uses: actions/setup-node@v4
