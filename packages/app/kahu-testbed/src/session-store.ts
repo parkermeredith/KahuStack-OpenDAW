@@ -123,20 +123,21 @@ const isTestbedSession = (value: unknown): value is TestbedSession | VersionFour
     const candidate = value as {version?: unknown, tracks?: unknown, rack?: unknown}
     if (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3
         && candidate.version !== 4 && candidate.version !== 5) return false
+    const version = candidate.version
     if (!Array.isArray(candidate.tracks) || typeof candidate.rack !== "string") return false
-    if (candidate.version === 2) {
+    if (version === 2) {
         const modern = candidate as {viewport?: unknown}
         if (!isLegacyViewport(modern.viewport)) return false
     }
-    if (candidate.version === 3) {
+    if (version === 3) {
         const modern = candidate as {viewport?: unknown}
         if (!isNormalizedViewport(modern.viewport)) return false
     }
-    if (candidate.version === 4 || candidate.version === 5) {
+    if (version === 4 || version === 5) {
         const modern = candidate as {viewport?: unknown, loop?: unknown, follow?: unknown}
         if (!isNormalizedViewport(modern.viewport) || !isTransportLoop(modern.loop) || typeof modern.follow !== "boolean") return false
     }
-    return candidate.tracks.every(track => isSessionTrack(track, candidate.version))
+    return candidate.tracks.every(track => isSessionTrack(track, version))
 }
 
 const isTransportLoop = (value: unknown): value is TransportLoop => {
