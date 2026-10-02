@@ -1,0 +1,821 @@
+@font-face
+  font-family: Rubik
+  font-weight: 300
+  font-style: normal
+  font-display: swap
+  src: url("/fonts/rubik-300.woff2") format("woff2")
+
+@font-face
+  font-family: Rubik
+  font-weight: 400
+  font-style: normal
+  font-display: swap
+  src: url("/fonts/rubik-400.woff2") format("woff2")
+
+:root
+  --kahu-track-rail: 14rem
+  --kahu-track-row-height: 3.75rem
+
+html, body
+  width: 100%
+  height: 100%
+  margin: 0
+  overflow: hidden
+  overscroll-behavior: none
+  color: var(--color-bright)
+  background: var(--color-background)
+  font-family: Rubik, sans-serif
+  font-size: 14px
+  font-weight: 300
+  font-variant-numeric: tabular-nums
+  text-rendering: optimizeLegibility
+
+*, *::before, *::after
+  box-sizing: border-box
+  user-select: none
+
+button, input, select
+  font: inherit
+
+button:disabled
+  cursor: default
+
+.hidden
+  display: none !important
+
+.testbed-shell
+  display: flex
+  flex-direction: column
+  width: 100%
+  height: 100%
+  min-width: 720px
+  background: var(--color-background)
+
+.testbed-header
+  display: flex
+  align-items: center
+  gap: 0.75rem
+  min-height: 3rem
+  padding: 0.35rem 0.6rem
+  background: var(--color-header-background)
+  border-bottom: 1px solid rgba(white, 0.06)
+
+.brand-lockup
+  display: flex
+  align-items: center
+  gap: 0.55rem
+
+  h1
+    margin: 0
+    font-size: 0.8rem
+    font-weight: 400
+
+  p
+    margin: 0.15rem 0 0
+    color: var(--color-gray)
+    font-size: 0.62rem
+
+.brand-mark
+  display: grid
+  place-items: center
+  width: 1.7rem
+  height: 1.7rem
+  color: var(--color-background)
+  background: var(--color-green)
+  border-radius: 0.2rem
+  font-size: 1rem
+  font-weight: 400
+
+.header-divider
+  width: 1px
+  height: 1.5rem
+  background: rgba(white, 0.08)
+
+.phase-label, .engine-status, .timeline-note, .rack-note, .testbed-footer
+  color: var(--color-gray)
+  font-size: 0.65rem
+  letter-spacing: 0.03em
+
+.header-spacer, .toolbar-spacer
+  flex: 1 1 auto
+
+.engine-status
+  color: var(--color-green)
+
+.header-button, .icon-button, .transport-button
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.2rem
+
+.header-button
+  padding: 0.35rem 0.55rem
+  font-size: 0.62rem
+
+.workspace
+  display: flex
+  flex: 1 1 auto
+  min-height: 0
+  overflow: hidden
+
+.timeline-panel
+  display: flex
+  flex: 1 1 auto
+  flex-direction: column
+  min-width: 0
+  min-height: 0
+  background: var(--color-panel-background)
+
+.timeline-header-grid, .timeline-navigation-row, .timeline-range-row, .track-workspace-row, .track-timeline-empty
+  display: grid
+  grid-template-columns: var(--kahu-track-rail) minmax(0, 1fr)
+
+.panel-heading, .timeline-toolbar, .rack-heading
+  display: flex
+  align-items: center
+  min-height: 2.4rem
+  padding: 0.35rem 0.55rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border-bottom: 1px solid rgba(white, 0.06)
+  font-size: 0.65rem
+  letter-spacing: 0.04em
+
+.track-column-heading
+  border-right: 1px solid rgba(white, 0.06)
+
+.icon-button
+  display: grid
+  place-items: center
+  width: 1.4rem
+  height: 1.4rem
+  margin-left: auto
+  padding: 0
+  cursor: pointer
+  font-size: 1rem
+
+.timeline-toolbar
+  min-width: 0
+
+.transport-controls, .transport-options
+  display: flex
+  align-items: center
+
+.transport-button, .stop-button
+  display: grid
+  place-items: center
+  width: 1.6rem
+  height: 1.6rem
+  padding: 0
+  color: var(--color-green)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.65rem
+
+.transport-button
+  margin-right: 0.3rem
+
+.stop-button
+  margin-right: 0.55rem
+  color: var(--color-gray)
+
+.transport-toggle-button
+  display: grid
+  place-items: center
+  width: 1.65rem
+  height: 1.6rem
+  margin-right: 0.25rem
+  padding: 0
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.2rem
+  cursor: pointer
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
+.transport-button:hover, .stop-button:hover, .transport-toggle-button:hover
+  color: var(--color-bright)
+  border-color: var(--color-green)
+
+.pause-glyph
+  display: inline-flex
+  gap: 0.15rem
+  width: 0.55rem
+  height: 0.75rem
+
+  &:before, &:after
+    content: ""
+    display: block
+    width: 0.18rem
+    height: 100%
+    background: currentColor
+
+.time-readout
+  display: flex
+  align-items: baseline
+  gap: 0.5rem
+  color: var(--color-bright)
+  font-size: 0.78rem
+
+.musical-readout
+  color: var(--color-green)
+  font-size: 0.65rem
+
+.position-input
+  width: 4.2rem
+  margin-left: 0.75rem
+  padding: 0.2rem 0.3rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.08)
+  border-radius: 0.2rem
+  font-size: 0.65rem
+
+.region-controls
+  display: flex
+  align-items: center
+  gap: 0.35rem
+  margin-left: 0.5rem
+  color: var(--color-gray)
+  font-size: 0.52rem
+
+  label
+    display: flex
+    align-items: center
+    gap: 0.2rem
+
+  input
+    width: 3.1rem
+    padding: 0.15rem 0.2rem
+    color: var(--color-gray)
+    background: var(--color-panel-background-dark)
+    border: 1px solid rgba(white, 0.08)
+    border-radius: 0.15rem
+    font-size: 0.55rem
+
+.timeline-canvas
+  position: relative
+  display: flex
+  flex: 1 1 auto
+  flex-direction: column
+  min-height: 0
+  overflow: hidden
+  background-color: var(--color-background)
+
+.timeline-navigation-row
+  flex: 0 0 2rem
+
+.track-navigation-spacer
+  border-right: 1px solid rgba(white, 0.06)
+  border-bottom: 1px solid rgba(white, 0.06)
+  background: var(--color-panel-background-dark)
+
+.track-timeline-scroll
+  flex: 1 1 auto
+  min-height: 0
+  overflow-x: hidden
+  overflow-y: auto
+  overscroll-behavior: contain
+  scrollbar-gutter: stable
+  background-image: linear-gradient(rgba(white, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(white, 0.035) 1px, transparent 1px)
+  background-size: 100% var(--kahu-track-row-height), 5rem 100%
+
+.track-timeline-rows
+  min-height: 100%
+
+.track-workspace-row
+  height: var(--kahu-track-row-height)
+  min-height: var(--kahu-track-row-height)
+  border-bottom: 1px solid rgba(white, 0.05)
+
+  &.selected
+    background: linear-gradient(90deg, rgba(white, 0.055), rgba(white, 0.012) 55%, transparent)
+
+  &.selected .track-color
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-green), white 18%)
+
+  &.selected .timeline-track-area
+    background-color: rgba(white, 0.028)
+
+.track-row
+  display: flex
+  align-items: center
+  gap: 0.45rem
+  min-width: 0
+  height: 100%
+  padding: 0.45rem 0.55rem
+  border-right: 1px solid rgba(white, 0.06)
+  background: color-mix(in srgb, var(--color-panel-background), transparent 7%)
+  cursor: default
+
+.track-color
+  flex: 0 0 0.22rem
+  width: 0.22rem
+  height: 2rem
+  background: var(--color-green)
+  border-radius: 0.15rem
+
+.track-info
+  min-width: 0
+  flex: 1 1 auto
+
+  strong, small
+    display: block
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+
+  strong
+    color: var(--color-bright)
+    font-size: 0.68rem
+    font-weight: 400
+
+  small
+    margin-top: 0.18rem
+    color: var(--color-gray)
+    font-size: 0.56rem
+
+.track-actions
+  display: flex
+  flex: 0 0 auto
+  gap: 0.12rem
+
+.track-action
+  width: 1.15rem
+  height: 1.15rem
+  min-width: 1.15rem
+  min-height: 1.15rem
+  padding: 0
+
+.track-gain
+  flex: 0 0 2.9rem
+  min-width: 2.9rem
+
+.timeline-track-lane, .timeline-track-area
+  position: relative
+  width: 100%
+  height: 100%
+  min-width: 0
+
+.timeline-track-area
+  overflow: hidden
+  background-image: linear-gradient(90deg, rgba(white, 0.035) 1px, transparent 1px)
+  background-size: 5rem 100%
+
+.timeline-region
+  position: absolute
+  top: 0.3rem
+  bottom: 0.3rem
+  min-width: 2rem
+  overflow: hidden
+  padding: 0
+  color: var(--color-bright)
+  background: color-mix(in srgb, var(--color-green), transparent 82%)
+  border: 1px solid color-mix(in srgb, var(--color-green), transparent 20%)
+  border-radius: 0.15rem
+  cursor: grab
+  text-align: left
+
+  &:hover
+    background: color-mix(in srgb, var(--color-green), transparent 74%)
+
+  &:active
+    cursor: grabbing
+
+.timeline-region-waveform
+  position: absolute
+  top: 0
+  bottom: 0
+  height: 100%
+  pointer-events: none
+
+.timeline-region-label
+  position: relative
+  z-index: 1
+  display: block
+  max-width: 100%
+  padding: 0.23rem 0.38rem
+  overflow: hidden
+  color: var(--color-bright)
+  font-size: 0.52rem
+  line-height: 1
+  text-overflow: ellipsis
+  text-shadow: 0 1px 2px rgba(black, 0.8)
+  white-space: nowrap
+  pointer-events: none
+
+.track-timeline-empty
+  min-height: 100%
+
+.track-empty-rail
+  display: flex
+  align-items: flex-start
+  padding: 1rem 0.7rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border-right: 1px solid rgba(white, 0.06)
+  font-size: 0.62rem
+
+.audio-empty-state
+  display: flex
+  align-items: center
+  justify-content: center
+  align-self: start
+  gap: 1rem
+  min-height: 9rem
+  margin: 1rem
+  padding: 1rem 1.2rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-bright)
+  border: 1px dashed rgba(white, 0.16)
+  border-left: 2px solid var(--color-green)
+
+  &.dragging
+    border-color: var(--color-orange)
+    background: color-mix(in srgb, var(--color-orange), transparent 90%)
+
+.audio-empty-copy
+  display: grid
+  gap: 0.3rem
+
+  strong
+    color: var(--color-bright)
+    font-size: 0.78rem
+    font-weight: 400
+
+  small
+    color: var(--color-gray)
+    font-size: 0.6rem
+
+.file-button
+  padding: 0.35rem 0.55rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  cursor: pointer
+  font-size: 0.6rem
+
+  &:hover
+    color: var(--color-bright)
+    border-color: var(--color-green)
+
+.timeline-playhead-surface
+  position: absolute
+  top: 2rem
+  right: 0
+  bottom: 0
+  left: var(--kahu-track-rail)
+  z-index: 5
+  overflow: hidden
+  pointer-events: none
+
+.playhead
+  position: absolute
+  top: 0
+  bottom: 0
+  left: 0
+  width: 1px
+  background: var(--color-orange)
+
+  &.outside-range
+    visibility: hidden
+
+.timeline-range-row
+  flex: 0 0 1rem
+
+.track-range-spacer
+  border-right: 1px solid rgba(white, 0.06)
+  border-top: 1px solid rgba(white, 0.06)
+  background: var(--color-panel-background-dark)
+
+.rack-panel
+  flex: 0 0 17.5rem
+  min-height: 0
+  overflow: hidden
+  border-top: 1px solid rgba(white, 0.06)
+  background: var(--color-panel-background)
+  transition: flex-basis 120ms ease
+
+  &.collapsed
+    flex-basis: 3.2rem
+
+  &.collapsed .rack-chain
+    display: none
+
+  &.collapsed .rack-heading
+    border-bottom: 0
+
+.rack-heading
+  min-height: 3.2rem
+  height: 3.2rem
+  flex: 0 0 3.2rem
+  gap: 0.45rem
+
+.rack-title-group
+  min-width: 11rem
+
+  h2
+    margin: 0.12rem 0 0
+    max-width: 19rem
+    overflow: hidden
+    color: var(--color-bright)
+    font-size: 0.78rem
+    font-weight: 400
+    text-overflow: ellipsis
+    white-space: nowrap
+
+.eyebrow
+  color: var(--color-green)
+  font-size: 0.54rem
+  letter-spacing: 0.08em
+
+.rack-note
+  margin-left: auto
+
+.module-picker
+  max-width: 15rem
+  padding: 0.3rem 0.4rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  font-size: 0.58rem
+
+.rack-add-button, .rack-bypass-button, .rack-collapse-button
+  display: grid
+  place-items: center
+  width: 1.65rem
+  height: 1.55rem
+  padding: 0
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.2rem
+  cursor: pointer
+
+.rack-add-button
+  color: var(--color-green)
+
+.rack-bypass-button
+  color: var(--color-orange)
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
+.rack-collapse-button:hover, .rack-add-button:hover, .rack-bypass-button:hover
+  border-color: var(--color-green)
+  color: var(--color-bright)
+
+.rack-chain
+  display: flex
+  align-items: stretch
+  gap: 0.15rem
+  height: calc(100% - 3.2rem)
+  padding: 0.3rem 0.35rem 0.5rem
+  overflow-x: auto
+  overflow-y: hidden
+  overscroll-behavior-x: contain
+  background: var(--color-panel-background)
+
+.rack-empty
+  display: flex
+  flex: 1 0 22rem
+  flex-direction: column
+  justify-content: center
+  gap: 0.4rem
+  min-width: 22rem
+  padding: 1rem 1.2rem
+  color: var(--color-gray)
+  font-size: 0.65rem
+
+  strong
+    color: var(--color-bright)
+    font-size: 0.75rem
+    font-weight: 400
+
+.rack-device
+  display: grid
+  grid-template-rows: 2rem auto minmax(0, 1fr)
+  flex: 0 0 auto
+  min-width: 14rem
+  height: 100%
+  overflow: hidden
+  color: var(--color-gray)
+  background: var(--color-panel-background-bright)
+  border-top: 1px solid var(--color-blue)
+  box-shadow: inset -1px 0 rgba(white, 0.035)
+
+  &.bypassed
+    filter: brightness(0.65) grayscale(0.5)
+
+  &.minimized
+    grid-template-rows: 100%
+    min-width: 1.8rem
+    width: 1.8rem
+    max-width: 1.8rem
+
+  &.minimized .rack-device-header
+    display: grid
+    grid-template-columns: 1fr
+    grid-template-rows: auto auto minmax(0, 1fr)
+    justify-items: center
+    align-items: start
+    gap: 0.12rem
+    width: 100%
+    height: 100%
+    padding: 0.2rem 0.18rem
+
+  &.minimized .rack-device-title
+    align-self: stretch
+    padding-top: 0.25rem
+    writing-mode: vertical-rl
+    text-orientation: mixed
+
+  &.minimized .rack-device-status
+    display: none
+
+.rack-device-header
+  display: grid
+  grid-template-columns: auto auto minmax(5rem, 1fr) auto auto
+  align-items: center
+  gap: 0.18rem
+  min-width: 0
+  height: 2rem
+  padding: 0 0.28rem
+  border-bottom: 1px solid rgba(white, 0.045)
+
+.rack-device-collapse, .rack-device-power
+  min-width: 1.35rem
+  min-height: 1.25rem
+  padding: 0.08rem
+
+.rack-device-title
+  min-width: 0
+  overflow: hidden
+  color: var(--color-bright)
+  font-size: 0.62rem
+  font-weight: 400
+  letter-spacing: 0.025em
+  text-overflow: ellipsis
+  white-space: nowrap
+
+.rack-device-status
+  color: var(--color-orange)
+  font-size: 0.46rem
+  letter-spacing: 0.05em
+  white-space: nowrap
+
+.rack-device-actions
+  display: flex
+  gap: 0.1rem
+
+.rack-control
+  min-width: 1.25rem
+  min-height: 1.2rem
+  padding: 0.08rem
+
+.rack-device-meta
+  min-height: 1.1rem
+  padding: 0.18rem 0.35rem
+  overflow: hidden
+  color: var(--color-gray)
+  font-size: 0.48rem
+  text-overflow: ellipsis
+  white-space: nowrap
+
+.rack-parameter-grid
+  display: grid
+  grid-auto-flow: column
+  grid-auto-columns: minmax(4.15rem, max-content)
+  grid-template-rows: repeat(2, minmax(0, 1fr))
+  align-items: start
+  align-content: stretch
+  gap: 0.15rem 0.12rem
+  min-width: max-content
+  height: 100%
+  padding: 0.15rem 0.3rem 0.3rem
+  overflow: visible
+
+.rack-parameter-cell
+  width: 4.1rem
+  display: grid
+  grid-template-rows: 1rem 2rem 1rem
+  justify-items: center
+  align-items: center
+  gap: 0.08rem
+  color: var(--color-gray)
+
+  &[data-automation="reprepare"]
+    box-shadow: inset 1px 0 var(--color-orange)
+
+.rack-parameter-label
+  width: 100%
+  overflow: hidden
+  color: var(--color-cream)
+  font-size: 0.5rem
+  letter-spacing: 0.05em
+  text-align: center
+  text-overflow: ellipsis
+  white-space: nowrap
+
+.rack-parameter-cell small
+  color: var(--color-gray)
+  font-size: 0.48rem
+  white-space: nowrap
+
+.rack-parameter-toggle
+  align-self: center
+
+.rack-parameter-select
+  width: 4rem
+  padding: 0.18rem 0.2rem
+  color: var(--color-gray)
+  background: var(--color-panel-background-dark)
+  border: 1px solid rgba(white, 0.09)
+  border-radius: 0.15rem
+  font-size: 0.5rem
+
+.rack-parameter-empty
+  display: grid
+  place-items: center
+  min-width: 9rem
+  color: var(--color-gray)
+  font-size: 0.58rem
+
+.testbed-footer
+  display: flex
+  align-items: center
+  gap: 0.75rem
+  justify-content: space-between
+  padding: 0.25rem 0.6rem
+  background: var(--color-footer-background)
+
+.runtime-info
+  margin-left: auto
+
+.footer-trim
+  display: flex
+  align-items: center
+  gap: 0.25rem
+  color: var(--color-gray)
+  font-size: 0.55rem
+
+.footer-value-control
+  min-width: 4.2rem
+
+.compare-button
+  min-width: 2.4rem
+  padding: 0.15rem 0.3rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.15rem
+  cursor: pointer
+  font-size: 0.55rem
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
+.spectrum-canvas
+  width: 6rem
+  height: 1rem
+  background: rgba(black, 0.25)
+
+.output-meter
+  display: block
+  width: 5rem
+  height: 0.35rem
+  overflow: hidden
+  background: rgba(black, 0.35)
+  border: 1px solid rgba(white, 0.08)
+
+.meter-fill
+  display: block
+  width: 0
+  height: 100%
+  background: var(--color-green)
+  transition: width 80ms linear
+
+@media (max-width: 900px)
+  :root
+    --kahu-track-rail: 11rem
+
+  .timeline-note, .rack-note
+    display: none
+
+  .rack-title-group
+    min-width: 8rem
+
+  .module-picker
+    max-width: 11rem
