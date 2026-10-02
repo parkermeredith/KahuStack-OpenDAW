@@ -1,12 +1,15 @@
 # Kahu Workbench UX Convergence
 
-Status: **KUX ACTIVE**  
+Status: **KUX-0 through KUX-7 SOURCE COMPLETE / KUX-8 OWNER QUALIFICATION PENDING**  
 Program: **KUX — Kahu Workbench UX Convergence**  
-Date: 2026-10-01  
+Date: 2026-10-02  
 Repository: `parkermeredith/KahuStack-OpenDAW`  
-Starting `main`: `3ac411ccf63c05a2ac8ab51c27f1bdabb5e7cce0`
+Starting `main`: `3ac411ccf63c05a2ac8ab51c27f1bdabb5e7cce0`  
+Qualified behavior checkpoint: `a8fa94f0f38d1c133eadef7a9484f4ac2f7936ac`
 
 KUX follows the source-complete KBW v2 and KUI interaction-parity programs. It does not broaden the workbench into a full DAW. It closes the remaining structural UX gap between the Kahu browser host and the openDAW editing/device-panel model while keeping KahuStack DSP, Kahu module manifests, Kahu rack state, Rust/WASM processing, transport semantics, and session state authoritative.
+
+The child standalone source gate is green at the qualified behavior checkpoint: OpenDAW package dependencies build, `typecheck:kahu`, `test:kahu`, workspace lint, and `build:kahu` all pass. Parent-built canonical Rust/WASM runtime staging/checks, the consolidated-rack benchmark rerun, and the browser/audio matrix remain owner-run qualification gates. Source completion does not imply those manual/runtime gates passed.
 
 ## Goal
 
@@ -34,14 +37,15 @@ Do not import the full openDAW Studio project model merely to obtain interface b
 
 Kahu workbench authorities:
 
-- `packages/app/kahu-testbed/src/main.tsx`
-- `packages/app/kahu-testbed/src/main.sass`
+- `packages/app/kahu-testbed/src/workbench.tsx`
+- `packages/app/kahu-testbed/src/workbench.sass`
 - `packages/app/kahu-testbed/src/track-store.ts`
 - `packages/app/kahu-testbed/src/waveform.ts`
 - `packages/app/kahu-testbed/src/timeline/visible-waveform.ts`
 - `packages/app/kahu-testbed/src/rack-store.ts`
 - `packages/app/kahu-testbed/src/kahu-runtime.ts`
 - `packages/app/kahu-testbed/src/parameter-editor.ts`
+- `packages/app/kahu-testbed/src/bypass-policy.ts`
 - `plans/kahu-interaction-parity.md`
 
 openDAW references:
@@ -65,29 +69,31 @@ Prior Kahu UX references in the parent DSP repo:
 
 ## Current defects captured by KUX
 
+The defects below are the baseline defects that motivated KUX. KUX-0 through KUX-7 close them in source; they remain useful regression descriptions.
+
 ### D1 — source preview is not the clip
 
-The current workbench renders one global waveform canvas in the source/drop zone. Actual timeline regions are separate and contain only text. Loaded audio therefore shows a waveform above the track instead of inside the region.
+The baseline workbench rendered one global waveform canvas in the source/drop zone. Actual timeline regions were separate and contained only text. Loaded audio therefore showed a waveform above the track instead of inside the region.
 
 ### D2 — track controls and lane content can drift
 
-The left track list and right lane list are independent vertical structures. A fixed `track-header-spacer` compensates for unrelated timeline content. This is not DPI-, zoom-, or layout-safe.
+The baseline left track list and right lane list were independent vertical structures. A fixed `track-header-spacer` compensated for unrelated timeline content. This was not DPI-, zoom-, or layout-safe.
 
 ### D3 — loaded-state source prompt remains in the timeline
 
-The large `LOAD AUDIO`/status surface remains visible after tracks are active. It should be a zero-track empty state only; the persistent TRACKS add button remains the normal add-source affordance.
+The baseline large `LOAD AUDIO`/status surface remained visible after tracks were active. KUX makes it a zero-track empty state; the persistent TRACKS add button remains the normal add-source affordance.
 
 ### D4 — stale rack presentation after source load
 
-New tracks are selected by the track store, but the load path does not refresh the rack after selection changes, allowing the rack to continue showing the no-selection placeholder.
+The baseline load path could select a newly loaded track without refreshing the rack, allowing the no-selection placeholder to remain stale.
 
 ### D5 — rack is too shallow and not collapsible
 
-The rack is fixed near 11rem while openDAW's Device Panel uses a roughly 248px working height. The rack should provide a real editing surface when open and a compact bar when collapsed.
+The baseline rack was fixed near 11rem while openDAW's Device Panel uses a roughly 248px working height. KUX provides a real editing surface when open and a compact collapsed header.
 
 ### D6 — generic rack card is not openDAW-like
 
-The current card uses a vertically scrolling parameter list. It does not use the openDAW device-panel shape, minimized device strip, full expanded control surface, or house rotary control language.
+The baseline card used a vertically scrolling parameter list. KUX adopts the openDAW device-panel shape, minimized device strip, complete expanded control surface, and house rotary control language while retaining Kahu runtime/state authority.
 
 ## Program
 
@@ -151,7 +157,8 @@ Exit: rack is useful as a device editor when open and unobtrusive when closed.
 - add per-device minimized state keyed by Kahu device ID;
 - expanded device has openDAW-style header, enable/bypass, title, menu/action area and full body;
 - minimized device becomes a narrow vertical strip;
-- preserve reorder/remove/reset behavior and Kahu rack semantics.
+- preserve reorder/remove/reset behavior and Kahu rack semantics;
+- compose global bypass with persisted per-device bypass so the global state cannot erase or defeat local intent.
 
 Exit: rack lifecycle and visual composition match the openDAW Device Panel model without adopting the openDAW project graph.
 
@@ -187,13 +194,22 @@ Exit: an expanded device exposes the complete sound-control surface.
 
 ### KUX-8 — qualification and closure
 
-Required source gates:
+Standalone child source gates:
 
 ```bash
 npm run typecheck:kahu
 npm run test:kahu
 npm run lint --workspace=@kahustack/opendaw-testbed
 npm run build:kahu
+```
+
+These gates are green at `a8fa94f0f38d1c133eadef7a9484f4ac2f7936ac`. The standalone manifest-contract tests use a deterministic fixture against the pinned parent validator snapshot so a clean child checkout does not falsely require generated runtime assets.
+
+Parent-integration/runtime gates remain owner-run from the canonical `kahustack-dsp` environment, where the Rust/WASM artifact is built and staged:
+
+```bash
+npm run build:wasm
+# from the child with KAHU_DSP_ROOT pointing at the parent checkout
 npm run check:kahu-runtime
 npm run perf:kahu-rack
 ```
@@ -210,7 +226,7 @@ Browser qualification matrix:
 - track-row alignment through vertical scrolling;
 - rack global collapse/expand;
 - device minimize/expand;
-- bypass/reorder/remove/reset;
+- bypass/reorder/remove/reset, including local bypass persistence across bypass-all on/off;
 - continuous/enum/boolean/reprepare parameters;
 - session save/recover;
 - dry/processed A/B and trims.
@@ -234,21 +250,38 @@ Expected commit sequence:
 9. `feat(kahu-rack): expose complete expanded editors`
 10. `docs(kahu-ux): record KUX qualification status`
 
-A phase may share a commit with an inseparable adjacent phase only when splitting it would leave `main` in a knowingly broken intermediate state. The plan must record the actual commit/evidence mapping.
+The actual implementation consolidated inseparable row/waveform/rack structural work into `c4626bdf` so `main` did not pass through intentionally broken intermediate layouts. Subsequent commits separate styling cleanup, interaction documentation, rotary scheduling, regression tests, standalone contract/CI hardening, and layered bypass correctness.
+
+## Actual commit/evidence mapping
+
+| Commit | Responsibility |
+| --- | --- |
+| `8ea4d669` | Start and define the KUX program. |
+| `905648b2` | Add the Kahu adapter for openDAW-style rotary controls. |
+| `c4626bdf` | Unify track rows, move waveforms into regions, establish zero-track loading, refresh selected-track rack state, expand/collapse the rack, adopt the horizontal retained-device chain, and expose complete expanded editors. |
+| `9411a166` | Remove superseded shell styling after the structural convergence. |
+| `40b41b72` | Document the resulting workbench interaction model. |
+| `0d5e8b09` | Coalesce rotary realtime updates for bounded UI-to-runtime traffic. |
+| `ba0bd0c7` | Lock row and rotary contracts with permanent tests. |
+| `a5a17d1f` | Promote the KUX workbench identity. |
+| `47c8f02f` | Make canonical manifest contract tests standalone and deterministic without generated runtime assets. |
+| `d8c5cdb` | Separate the reproducible child source gate from parent-built runtime qualification. |
+| `5b1496f` | Define the global/local layered bypass invariant. |
+| `a8fa94f` | Apply layered bypass composition to device mutation, runtime initialization, and bypass-all restoration. |
 
 ## Progress register
 
 | Phase | Status | Evidence |
 | --- | --- | --- |
-| KUX-0 | pending | — |
-| KUX-1 | pending | — |
-| KUX-2 | pending | — |
-| KUX-3 | pending | — |
-| KUX-4 | pending | — |
-| KUX-5 | pending | — |
-| KUX-6 | pending | — |
-| KUX-7 | pending | — |
-| KUX-8 | pending | — |
+| KUX-0 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf`, `ba0bd0c7` |
+| KUX-1 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf`, `9411a166`, `ba0bd0c7` |
+| KUX-2 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf` |
+| KUX-3 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf` |
+| KUX-4 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf` |
+| KUX-5 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf`, `5b1496f`, `a8fa94f` |
+| KUX-6 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `905648b2`, `0d5e8b09`, `ba0bd0c7` |
+| KUX-7 | **SOURCE COMPLETE / OWNER VALIDATION PENDING** | `c4626bdf` |
+| KUX-8 | **CHILD SOURCE GATES COMPLETE / OWNER PARENT-RUNTIME + BROWSER/AUDIO QUALIFICATION PENDING** | green source gate at `a8fa94f`; parent-built runtime check/benchmark and manual matrix remain pending |
 
 ## End-state invariant
 
