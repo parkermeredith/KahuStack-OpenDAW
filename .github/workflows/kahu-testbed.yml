@@ -1,0 +1,54 @@
+name: Kahu Testbed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/app/kahu-testbed/**"
+      - "scripts/*kahu*"
+      - "plans/kahu-*"
+      - ".github/workflows/kahu-testbed.yml"
+  pull_request:
+    paths:
+      - "packages/app/kahu-testbed/**"
+      - "scripts/*kahu*"
+      - "plans/kahu-*"
+      - ".github/workflows/kahu-testbed.yml"
+  workflow_dispatch:
+
+jobs:
+  source-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout KahuStack-OpenDAW
+        uses: actions/checkout@v4
+        with:
+          path: child
+
+      - name: Checkout canonical KahuStack DSP
+        uses: actions/checkout@v4
+        with:
+          repository: parkermeredith/kahustack-dsp
+          path: kahustack-dsp
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: child/package-lock.json
+
+      - name: Install dependencies
+        working-directory: child
+        run: npm ci
+
+      - name: Validate Kahu browser workbench source
+        working-directory: child
+        env:
+          KAHU_DSP_ROOT: ${{ github.workspace }}/kahustack-dsp
+        run: |
+          npm run typecheck:kahu
+          npm run test:kahu
+          npm run lint --workspace=@kahustack/opendaw-testbed
+          npm run build:kahu
