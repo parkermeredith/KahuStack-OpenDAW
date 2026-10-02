@@ -1,4 +1,4 @@
-// KOD-5 rack authority: retained audio-effect slot lifecycle without implementing fake DSP.
+// KBW-7/12 rack authority: persists ordered device intent while Rust-WASM owns DSP execution.
 
 export type RackDevice = {
     readonly id: string
@@ -10,7 +10,7 @@ export type RackDevice = {
 }
 
 export type RackSession = Readonly<{
-    version: 1
+    version: 2
     chains: ReadonlyArray<Readonly<{trackId: string, devices: ReadonlyArray<Readonly<RackDevice>>}>>
 }>
 
@@ -98,7 +98,7 @@ export class RackStore {
 
     serialize(): string {
         const session: RackSession = {
-            version: 1,
+            version: 2,
             chains: Array.from(this.chains.entries()).map(([trackId, devices]) => ({trackId, devices}))
         }
         return JSON.stringify(session)
@@ -138,5 +138,19 @@ const isRackSession = (value: unknown): value is RackSession => {
         return false
     }
     const candidate = value as {version?: unknown, chains?: unknown}
-    return candidate.version === 1 && Array.isArray(candidate.chains)
+    if (candidate.version !== 1 && candidate.version !== 2 || !Array.isArray(candidate.chains)) return false
+    return candidate.chains.every(chain => {
+        if (typeof chain !== "object" || chain === null) return false
+        const value = chain as {trackId?: unknown, devices?: unknown}
+        if (typeof value.trackId !== "string" || !Array.isArray(value.devices)) return false
+        return value.devices.every(device => {
+            if (typeof device !== "object" || device === null) return false
+            const item = device as Record<string, unknown>
+            const values = item.parameterValues
+            return typeof item.id === "string" && typeof item.name === "string"
+                && (item.moduleId === undefined || typeof item.moduleId === "string")
+                && typeof item.bypassed === "boolean" && typeof values === "object" && values !== null
+                && Object.values(values as Record<string, unknown>).every(value => typeof value === "number" && Number.isFinite(value))
+        })
+    })
 }

@@ -1,4 +1,5 @@
-// KBW-3 browser audio boundary: decodes admitted source audio and schedules it at a shared Web Audio epoch.
+// KBW-3/11 browser audio boundary: decodes admitted source audio, schedules it at a shared Web
+// Audio epoch, and exposes bounded dry/processed monitor routing without owning DSP semantics.
 
 export type DecodedAudioFile = Readonly<{
     name: string
@@ -25,6 +26,7 @@ export class AudioTrackPlayer {
     private startedAtSeconds = 0
     private offsetSeconds = 0
     private readonly gainNode: GainNode
+    private readonly inputTrimNode: GainNode
 
     constructor(
         private readonly context: AudioContext,
@@ -32,7 +34,9 @@ export class AudioTrackPlayer {
         output: AudioNode = context.destination
     ) {
         this.gainNode = context.createGain()
-        this.gainNode.connect(output)
+        this.inputTrimNode = context.createGain()
+        this.gainNode.connect(this.inputTrimNode)
+        this.inputTrimNode.connect(output)
     }
 
     load(buffer: AudioBuffer): void {
@@ -124,8 +128,18 @@ export class AudioTrackPlayer {
     }
 
     setOutput(output: AudioNode): void {
-        this.gainNode.disconnect()
-        this.gainNode.connect(output)
+        this.inputTrimNode.disconnect()
+        this.inputTrimNode.connect(output)
+    }
+
+    setComparisonOutputs(processedInput: AudioNode, dryOutput: AudioNode): void {
+        this.inputTrimNode.disconnect()
+        this.inputTrimNode.connect(processedInput)
+        this.inputTrimNode.connect(dryOutput)
+    }
+
+    setInputTrim(gain: number): void {
+        this.inputTrimNode.gain.setValueAtTime(Math.min(4, Math.max(0, gain)), this.context.currentTime)
     }
 
     private stopSource(): void {

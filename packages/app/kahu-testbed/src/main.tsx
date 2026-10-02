@@ -13,7 +13,7 @@ import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
 import {TimelineViewport} from "./timeline"
 import {RackStore} from "./rack-store"
-import {KahuGainRuntime, KahuModuleManifest, KahuParameterManifest} from "./kahu-runtime"
+import {KahuDeviceRuntime, KahuGainRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime} from "./kahu-runtime"
 import {
     controlStep,
     controlValueToParameterValue,
@@ -28,9 +28,17 @@ document.title = TestbedShell.title
 
 const audioContext = new AudioContext()
 const monitorInput = audioContext.createGain()
+const dryMonitor = audioContext.createGain()
+const dryCompare = audioContext.createGain()
+const processedCompare = audioContext.createGain()
+const outputTrim = audioContext.createGain()
 const analyser = audioContext.createAnalyser()
 analyser.fftSize = 256
-monitorInput.connect(analyser)
+monitorInput.connect(processedCompare)
+dryMonitor.connect(dryCompare)
+processedCompare.connect(outputTrim)
+dryCompare.connect(outputTrim)
+outputTrim.connect(analyser)
 analyser.connect(audioContext.destination)
 const transport = new Transport(() => audioContext.currentTime)
 const timelineViewport = new TimelineViewport()
@@ -39,7 +47,9 @@ const rackStore = new RackStore()
 const audioPlayers = new Map<string, AudioTrackPlayer>()
 const waveformPyramids = new Map<string, WaveformPyramid>()
 const waveformBuilds = new Map<string, Promise<WaveformPyramid>>()
-const kahuRuntimes = new Map<string, KahuGainRuntime>()
+const CONSOLIDATED_RACK_RUNTIME = true
+const kahuRuntimes = new Map<string, KahuDeviceRuntime>()
+const rackHosts = new Map<string, KahuRackRuntime>()
 const runtimeErrors = new Map<string, string>()
 let catalogModules: ReadonlyArray<KahuModuleManifest> = []
 let timeReadout: HTMLElement | undefined
@@ -55,6 +65,7 @@ let timelineContent: HTMLElement | undefined
 let playButton: HTMLButtonElement | undefined
 let engineStatus: HTMLElement | undefined
 let waveformCanvas: HTMLCanvasElement | undefined
+let spectrumCanvas: HTMLCanvasElement | undefined
 let audioStatus: HTMLElement | undefined
 let audioMetadata: HTMLElement | undefined
 let trackList: HTMLElement | undefined
@@ -67,12 +78,31 @@ let meterFill: HTMLElement | undefined
 let meterReadout: HTMLElement | undefined
 let bypassAllButton: HTMLButtonElement | undefined
 let bypassAll = false
+let compareDry = false
+let inputTrimDb = 0
+let outputTrimDb = 0
+
+const setMonitorComparison = (): void => {
+    dryCompare.gain.setValueAtTime(compareDry ? 1 : 0, audioContext.currentTime)
+    processedCompare.gain.setValueAtTime(compareDry ? 0 : 1, audioContext.currentTime)
+}
+
+const setOutputTrim = (): void => {
+    outputTrim.gain.setValueAtTime(10 ** (outputTrimDb / 20), audioContext.currentTime)
+}
+
+setMonitorComparison()
+setOutputTrim()
 let animationFrame = 0
 let waveformZoom = 1
 
 const saveSession = (): void => {
     try {
-        localStorage.setItem(SESSION_STORAGE_KEY, encodeSession(createSession(trackStore.all(), rackStore)))
+        const viewport = timelineViewport.snapshot()
+        localStorage.setItem(
+            SESSION_STORAGE_KEY,
+            encodeSession(createSession(trackStore.all(), rackStore, trackStore.selected()?.id, viewport)),
+        )
         engineStatus?.replaceChildren("SESSION SAVED · SOURCE FILES LOCAL")
     } catch {
         engineStatus?.replaceChildren("SESSION SAVE FAILED")
@@ -87,6 +117,9 @@ const recoverSession = (): void => {
             return
         }
         const session = decodeSession(serialized)
+        timelineViewport.setZoom(session.viewport.zoom)
+        timelineViewport.setScrollFraction(session.viewport.scrollFraction)
+        if (session.selectedTrackId !== undefined) trackStore.select(session.selectedTrackId)
         rackStore.restore(session.rack)
         refreshRack()
         for (const track of trackStore.all()) {
@@ -135,6 +168,22 @@ const refreshMeter = (): void => {
     const db = peak > 0 ? 20 * Math.log10(peak) : -Infinity
     meterFill?.style.setProperty("width", `${Math.min(1, peak) * 100}%`)
     meterReadout?.replaceChildren(Number.isFinite(db) ? `${db.toFixed(1)} dBFS` : "-∞ dBFS")
+    const canvas = spectrumCanvas
+    const context = canvas?.getContext("2d")
+    if (canvas !== undefined && context !== null && context !== undefined) {
+        const frequencies = new Float32Array(analyser.frequencyBinCount)
+        analyser.getFloatFrequencyData(frequencies)
+        const width = canvas.width = Math.max(1, Math.floor(canvas.clientWidth * Math.min(2, window.devicePixelRatio || 1)))
+        const height = canvas.height = Math.max(1, Math.floor(canvas.clientHeight * Math.min(2, window.devicePixelRatio || 1)))
+        context.clearRect(0, 0, width, height)
+        context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-green")
+        const barWidth = width / 24
+        for (let bar = 0; bar < 24; bar++) {
+            const index = Math.min(frequencies.length - 1, Math.floor((bar / 24) ** 1.8 * frequencies.length))
+            const normalized = Math.max(0, Math.min(1, (frequencies[index] + 96) / 96))
+            context.fillRect(bar * barWidth, height * (1 - normalized), Math.max(1, barWidth - 1), height * normalized)
+        }
+    }
 }
 
 const restartTransportRefresh = (): void => {
@@ -204,7 +253,9 @@ const ensureWaveformPyramid = (track: TrackState): void => {
 }
 
 const applyTrackGain = (track: TrackState): void => {
-    audioPlayers.get(track.id)?.setGain(trackStore.isAudible(track) ? track.gain : 0)
+    const player = audioPlayers.get(track.id)
+    player?.setGain(trackStore.isAudible(track) ? track.gain : 0)
+    player?.setInputTrim(10 ** (inputTrimDb / 20))
 }
 
 const refreshTrackPlayers = (): void => {
@@ -286,6 +337,8 @@ const removeTrack = (id: string): void => {
         kahuRuntimes.delete(device.id)
         runtimeErrors.delete(device.id)
     }
+    rackHosts.get(id)?.dispose()
+    rackHosts.delete(id)
     trackStore.remove(id)
     rackStore.removeTrack(id)
     refreshTrackList()
@@ -386,11 +439,21 @@ const rebuildTrackRack = (trackId: string): void => {
     }
     const runtimes = rackStore.devicesFor(trackId)
         .map(device => kahuRuntimes.get(device.id))
-        .filter((runtime): runtime is KahuGainRuntime => runtime !== undefined)
+        .filter((runtime): runtime is KahuDeviceRuntime => runtime !== undefined)
+    if (CONSOLIDATED_RACK_RUNTIME) {
+        const rack = rackHosts.get(trackId)
+        if (rack !== undefined) {
+            rack.connectOutput(monitorInput)
+            player.setComparisonOutputs(rack.input, dryMonitor)
+        } else {
+            player.setOutput(dryMonitor)
+        }
+        return
+    }
     for (let index = 0; index < runtimes.length; index++) {
         runtimes[index].connectOutput(runtimes[index + 1]?.output ?? monitorInput)
     }
-    player.setOutput(runtimes[0]?.output ?? monitorInput)
+    player.setOutput(runtimes[0]?.output ?? dryMonitor)
 }
 
 const parameterEditor = (
@@ -398,7 +461,7 @@ const parameterEditor = (
     deviceId: string,
     deviceModuleId: string | undefined,
     deviceValues: Record<string, number>,
-    runtime: KahuGainRuntime | undefined,
+    runtime: KahuDeviceRuntime | undefined,
     parameter: KahuParameterManifest,
 ): HTMLElement => {
     const row = document.createElement("label")
@@ -542,6 +605,7 @@ const refreshRack = (): void => {
         moveLeft.onclick = () => {
             rackStore.move(track.id, device.id, -1)
             rebuildTrackRack(track.id)
+            if (runtime !== undefined && "move" in runtime) void runtime.move(-1)
             refreshRack()
         }
         const moveRight = document.createElement("button")
@@ -552,6 +616,7 @@ const refreshRack = (): void => {
         moveRight.onclick = () => {
             rackStore.move(track.id, device.id, 1)
             rebuildTrackRack(track.id)
+            if (runtime !== undefined && "move" in runtime) void runtime.move(1)
             refreshRack()
         }
         const remove = document.createElement("button")
@@ -595,7 +660,19 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
     }
     engineStatus?.replaceChildren("RUST/WASM ENGINE · LOADING")
     try {
-        const runtime = await KahuGainRuntime.create(audioContext, 2, 128, moduleId)
+        const runtime = CONSOLIDATED_RACK_RUNTIME
+            ? await (async () => {
+                let rack = rackHosts.get(trackId)
+                if (rack === undefined) {
+                    rack = await KahuRackRuntime.create(audioContext, 2, 128)
+                    rackHosts.set(trackId, rack)
+                }
+                const module = catalogModules.find(candidate => candidate.id === moduleId)
+                if (module === undefined) throw new Error(`Generated Kahu manifest does not contain ${moduleId}.`)
+                kahuRuntimes.get(deviceId)?.dispose()
+                return rack.addDevice(module)
+            })()
+            : await KahuGainRuntime.create(audioContext, 2, 128, moduleId)
         kahuRuntimes.get(deviceId)?.dispose()
         kahuRuntimes.set(deviceId, runtime)
         rebuildTrackRack(trackId)
@@ -681,8 +758,8 @@ const loadAudio = async (file: File): Promise<void> => {
         const state = trackStore.add(track)
         const player = new AudioTrackPlayer(audioContext, handleAudioEnded)
         player.load(track.buffer)
-        player.setOutput(monitorInput)
         audioPlayers.set(state.id, player)
+        rebuildTrackRack(state.id)
         const device = rackStore.addModule(state.id, "utility.gain", "Gain", {gain_db: 0})
         refreshTrackList()
         updateSelectedTrack()
@@ -932,6 +1009,29 @@ replaceChildren(document.body, (
         <footer className="testbed-footer">
             <span>kahustack-dsp</span>
             <span className="runtime-info">{`${audioContext.sampleRate} Hz · 128 frame blocks`}</span>
+            <label className="footer-trim">IN
+                <input type="range" min="-24" max="12" step="0.1" value="0" aria-label="Input trim dB"
+                       onInit={element => element.oninput = () => {
+                           inputTrimDb = Number(element.value)
+                           refreshTrackPlayers()
+                       }}/>
+            </label>
+            <label className="footer-trim">OUT
+                <input type="range" min="-24" max="12" step="0.1" value="0" aria-label="Output trim dB"
+                       onInit={element => element.oninput = () => {
+                           outputTrimDb = Number(element.value)
+                           setOutputTrim()
+                       }}/>
+            </label>
+            <button className={`compare-button${compareDry ? " active" : ""}`} type="button"
+                    aria-label="Toggle dry comparison" onInit={element => element.onclick = () => {
+                        compareDry = !compareDry
+                        setMonitorComparison()
+                        element.classList.toggle("active", compareDry)
+                        element.textContent = compareDry ? "DRY" : "PROC"
+                    }}>PROC</button>
+            <canvas className="spectrum-canvas" width="96" height="16" aria-label="Output spectrum"
+                    onInit={element => spectrumCanvas = element}/>
             <span className="output-meter" aria-label="Output meter">
                 <span className="meter-fill" onInit={element => meterFill = element}/>
             </span>

@@ -20,7 +20,7 @@ KBW hardens the KOD prototype into a compact KahuStack browser engineering host.
 general-purpose DAW and must continue to use KahuStack's canonical Rust DSP, generated manifest,
 registry, parameter semantics, runtime lifecycle, and Rust-WASM lineage.
 
-Current status: **KBW-0 SOURCE COMPLETE / KBW-1 SOURCE COMPLETE / KBW-2 ACTIVE**.
+Current status: **KBW-0 through KBW-13 SOURCE COMPLETE / OWNER VALIDATION PENDING; KBW-14 ACTIVE**.
 
 KBW-0 baseline was rerun at parent `e6de30edbd1a2f3d116ee4bcc4472c0af2690743` and child
 `edda8be2af9674906b7e99a514159d3289df4e31`. KBW-1 is implemented at child `0708cdbba`:
@@ -28,25 +28,42 @@ the child stages the parent-owned manifest types and executable validator, parse
 catalog through that validator, and permanently tests malformed module, parameter, enum, registry,
 control, scale, transition, and duplicate-ID cases.
 
+KBW-2 through KBW-6 are implemented at the local source checkpoint after child `6d8001d39`:
+the editor is manifest-driven, transport scheduling uses one shared audio epoch, regions carry
+timeline/source timing, waveform work is worker-built through a min/max pyramid, and timeline lanes
+use bounded viewport math. KBW-7 through KBW-13 are implemented in the current uncommitted slice:
+the named reference runtime is retained, a consolidated Rust-WASM rack is exposed and used by the
+browser host, the scaling benchmark emits machine-readable rows, monitor comparison controls and
+version-two session migration are present, and the parent manifest remains the semantic authority.
+Long-form streaming remains explicitly deferred.
+
+KBW-8 source benchmark snapshot (`npm run perf:kahu-rack`, Node 24, 48 kHz, stereo, 128-frame
+blocks) measured one consolidated AudioWorklet/WASM instance for every chain length. JS/WASM copy
+volume stayed at 2,048 bytes per block for the consolidated rack versus 2,048/4,096/8,192/16,384/
+32,768 bytes for the reference topology at 1/2/4/8/16 devices. Consolidated P95 process time was
+0.000747/0.001693/0.002714/0.007091/0.010987 ms per block; reference was
+0.004554/0.001577/0.004023/0.004984/0.012714 ms in the same run. These are Node-WASM comparison
+measurements, not browser AudioWorklet deadline evidence.
+
 KBW phase register:
 
 | Phase | Status | Scope |
 | --- | --- | --- |
 | KBW-0 | SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING | Baseline and regression inventory. |
 | KBW-1 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Canonical manifest contract consumption. |
-| KBW-2 | ACTIVE | Generic metadata-driven processor editor. |
-| KBW-3 | NOT STARTED | Shared sample-clock transport epoch. |
-| KBW-4 | NOT STARTED | Minimal region timing. |
-| KBW-5 | NOT STARTED | Worker multiresolution waveform pyramid. |
-| KBW-6 | NOT STARTED | Minimal timeline architecture boundaries. |
-| KBW-7 | NOT STARTED | Per-device reference runtime instrumentation. |
-| KBW-8 | NOT STARTED | 1/2/4/8/16 processor scaling benchmark. |
-| KBW-9 | NOT STARTED | Consolidated Rust rack runtime. |
-| KBW-10 | NOT STARTED | Evidence-based runtime choice. |
-| KBW-11 | NOT STARTED | DSP comparison and analysis controls. |
-| KBW-12 | NOT STARTED | Session model hardening and migration. |
-| KBW-13 | NOT STARTED | Browser/native semantic convergence. |
-| KBW-14 | NOT STARTED | Prototype-debt and documentation closure. |
+| KBW-2 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Generic metadata-driven processor editor. |
+| KBW-3 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Shared sample-clock transport epoch. |
+| KBW-4 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Minimal region timing. |
+| KBW-5 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Worker multiresolution waveform pyramid. |
+| KBW-6 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Minimal timeline architecture boundaries. |
+| KBW-7 | SOURCE COMPLETE / OWNER VALIDATION PENDING | Named per-device reference runtime retained for comparison. |
+| KBW-8 | SOURCE COMPLETE / OWNER NODE BENCHMARK RERUN PENDING | 1/2/4/8/16 processor scaling benchmark. |
+| KBW-9 | SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING | Consolidated Rust rack runtime and AudioWorklet adapter. |
+| KBW-10 | SOURCE COMPLETE / OWNER BROWSER VALIDATION PENDING | Consolidated runtime selected as default; reference retained diagnostically. |
+| KBW-11 | SOURCE COMPLETE / OWNER LISTENING VALIDATION PENDING | DSP comparison, A/B, trims, metering, and spectrum controls. |
+| KBW-12 | SOURCE COMPLETE / OWNER RECOVERY VALIDATION PENDING | Versioned session model, validation, and v1 migration. |
+| KBW-13 | SOURCE COMPLETE / OWNER CROSS-HOST VALIDATION PENDING | Parent manifest/registry/parameter semantics remain shared. |
+| KBW-14 | ACTIVE | Prototype-debt, benchmark evidence, and documentation closure. |
 
 Long-form streaming audio is explicitly deferred. KBW targets normal songs, stems, and reference
 tracks from seconds through tens of minutes; it does not authorize five-hour recording, streaming

@@ -33,6 +33,19 @@ each other.
 
 ---
 
+## KahuStack Browser Workbench
+
+The `@kahustack/opendaw-testbed` package is the active KahuStack browser engineering host. It stages the
+parent repository's generated manifest, registry catalog, and Rust-derived WASM artifact; it does not
+reimplement DSP in TypeScript. Its active KBW v2 register is in
+[`plans/kahustack-dsp-testbed.md`](plans/kahustack-dsp-testbed.md).
+
+Focused commands are `npm run dev:kahu`, `npm run typecheck:kahu`, `npm run test:kahu`,
+`npm run build:kahu`, and `npm run perf:kahu-rack`. The workbench defaults to the consolidated Rust
+rack while retaining the per-device reference runtime for diagnostics and comparison. Browser timing,
+audio-device, listening, and recovery checks remain owner-run. Long-form streaming audio is explicitly
+deferred; ordinary songs, stems, and reference tracks are the supported scope.
+
 ## Open-Source
 
 We are committed to transparency and community-driven development.

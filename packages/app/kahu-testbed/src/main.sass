@@ -738,6 +738,37 @@ button:disabled
 .runtime-info
   margin-left: auto
 
+.footer-trim
+  display: flex
+  align-items: center
+  gap: 0.25rem
+  color: var(--color-gray)
+  font-size: 0.55rem
+
+  input
+    width: 3.5rem
+    accent-color: var(--color-green)
+
+.compare-button
+  min-width: 2.4rem
+  padding: 0.15rem 0.3rem
+  color: var(--color-gray)
+  background: var(--color-panel-background)
+  border: 1px solid rgba(white, 0.1)
+  border-radius: 0.15rem
+  cursor: pointer
+  font-size: 0.55rem
+
+  &.active
+    color: var(--color-background)
+    background: var(--color-orange)
+    border-color: var(--color-orange)
+
+.spectrum-canvas
+  width: 6rem
+  height: 1rem
+  background: rgba(black, 0.25)
+
 .output-meter
   display: block
   width: 5rem

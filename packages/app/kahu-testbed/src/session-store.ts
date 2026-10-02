@@ -1,7 +1,9 @@
-// KOD-9 session boundary: persists recoverable rack/track metadata without copying browser audio data.
+// KBW-12 session boundary: persists versioned recoverable rack/track/view metadata without copying
+// browser audio data. Source files remain explicit owner-provided inputs during recovery.
 
 import type {RackStore} from "./rack-store"
 import type {TrackState} from "./track-store"
+import type {AudioRegion} from "./region"
 
 export type SessionTrack = Readonly<{
     id: string
@@ -10,27 +12,47 @@ export type SessionTrack = Readonly<{
     durationSeconds: number
     sampleRate: number
     channelCount: number
+    muted: boolean
+    solo: boolean
+    gain: number
+    region: AudioRegion
 }>
 
 export type TestbedSession = Readonly<{
-    version: 1
+    version: 2
     tracks: ReadonlyArray<SessionTrack>
     rack: string
+    selectedTrackId?: string
+    viewport: Readonly<{zoom: number, scrollFraction: number}>
 }>
 
-export const SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v1"
+export const SESSION_STORAGE_KEY = "kahustack-dsp-testbed.session.v2"
 
-export const createSession = (tracks: ReadonlyArray<TrackState>, rack: RackStore): TestbedSession => ({
-    version: 1,
+export const createSession = (
+    tracks: ReadonlyArray<TrackState>,
+    rack: RackStore,
+    selectedTrackId?: string,
+    viewport: Readonly<{zoom: number, scrollFraction: number}> = {zoom: 1, scrollFraction: 0},
+): TestbedSession => ({
+    version: 2,
     tracks: tracks.map(track => ({
         id: track.id,
         name: track.name,
         fileName: track.audio.name,
         durationSeconds: track.audio.durationSeconds,
         sampleRate: track.audio.sampleRate,
-        channelCount: track.audio.channelCount
+        channelCount: track.audio.channelCount,
+        muted: track.muted,
+        solo: track.solo,
+        gain: track.gain,
+        region: track.region,
     })),
-    rack: rack.serialize()
+    rack: rack.serialize(),
+    selectedTrackId,
+    viewport: {
+        zoom: Math.min(16, Math.max(1, viewport.zoom)),
+        scrollFraction: Math.min(1, Math.max(0, viewport.scrollFraction)),
+    },
 })
 
 export const encodeSession = (session: TestbedSession): string => JSON.stringify(session)
@@ -40,13 +62,54 @@ export const decodeSession = (serialized: string): TestbedSession => {
     if (!isTestbedSession(value)) {
         throw new Error("Invalid Kahu testbed session.")
     }
+    if (value.version === 1) return migrateV1(value)
     return value
 }
 
-const isTestbedSession = (value: unknown): value is TestbedSession => {
+type LegacySession = Readonly<{
+    version: 1
+    tracks: ReadonlyArray<Readonly<{id: string, name: string, fileName: string, durationSeconds: number, sampleRate: number, channelCount: number}>>
+    rack: string
+}>
+
+const isTestbedSession = (value: unknown): value is TestbedSession | LegacySession => {
     if (typeof value !== "object" || value === null) {
         return false
     }
     const candidate = value as {version?: unknown, tracks?: unknown, rack?: unknown}
-    return candidate.version === 1 && Array.isArray(candidate.tracks) && typeof candidate.rack === "string"
+    if (candidate.version !== 1 && candidate.version !== 2) return false
+    if (!Array.isArray(candidate.tracks) || typeof candidate.rack !== "string") return false
+    if (candidate.version === 2) {
+        const modern = candidate as {viewport?: unknown}
+        if (typeof modern.viewport !== "object" || modern.viewport === null) return false
+    }
+    return candidate.tracks.every(track => isSessionTrack(track, candidate.version === 2))
 }
+
+const isSessionTrack = (value: unknown, modern: boolean): boolean => {
+    if (typeof value !== "object" || value === null) return false
+    const track = value as Record<string, unknown>
+    const base = typeof track.id === "string" && typeof track.name === "string"
+        && typeof track.fileName === "string" && finiteNonNegative(track.durationSeconds)
+        && finitePositive(track.sampleRate) && Number.isInteger(track.channelCount) && Number(track.channelCount) > 0
+    if (!base || !modern) return base
+    return typeof track.muted === "boolean" && typeof track.solo === "boolean"
+        && typeof track.gain === "number" && Number.isFinite(track.gain)
+        && typeof track.region === "object" && track.region !== null
+}
+
+const finiteNonNegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0
+const finitePositive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+
+const migrateV1 = (session: LegacySession): TestbedSession => ({
+    version: 2,
+    tracks: session.tracks.map(track => ({
+        ...track,
+        muted: false,
+        solo: false,
+        gain: 1,
+        region: {timelineStartSeconds: 0, sourceOffsetSeconds: 0, durationSeconds: track.durationSeconds},
+    })),
+    rack: session.rack,
+    viewport: {zoom: 1, scrollFraction: 0},
+})

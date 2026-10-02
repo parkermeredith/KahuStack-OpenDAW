@@ -14,6 +14,7 @@
     "build:kahu": "npm run build --workspace @kahustack/opendaw-testbed",
     "dev:kahu": "npm run dev --workspace=@kahustack/opendaw-testbed --",
     "perf:kahu": "node scripts/measure-kahu-host.mjs",
+    "perf:kahu-rack": "node scripts/measure-kahu-rack.mjs",
     "typecheck:kahu": "npm run typecheck --workspace=@kahustack/opendaw-testbed",
     "dev:studio": "turbo run dev --filter=@opendaw/app-studio --filter=@opendaw/manual",
     "dev:lab": "turbo run dev --filter=@opendaw/lab",

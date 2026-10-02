@@ -1,4 +1,5 @@
-// KBW-1 host bridge: consumes the parent-owned generated manifest contract and retains Rust-WASM
+// KBW-1/7 host bridge: consumes the parent-owned generated manifest contract and exposes both the
+// reference per-device runtime and the consolidated Rust-WASM rack.
 // AudioWorklet devices. Metadata parsing is delegated to the copied canonical validator.
 
 import {parseLibraryManifest} from "./generated/kahu-manifest-runtime.js"
@@ -92,6 +93,10 @@ export class KahuGainRuntime {
         return this.node
     }
 
+    get input(): AudioWorkletNode {
+        return this.node
+    }
+
     get latency(): number {
         return this.latencySamples
     }
@@ -169,6 +174,7 @@ export class KahuGainRuntime {
             this.node.port.postMessage({
                 type: "init",
                 wasmBytes,
+                mode: "reference",
                 moduleIndex,
                 sampleRate,
                 channels,
@@ -177,3 +183,138 @@ export class KahuGainRuntime {
         })
     }
 }
+
+/** Reference architecture retained for diagnostics and comparison against the consolidated rack. */
+export {KahuGainRuntime as ReferenceDeviceRuntime}
+
+export class KahuRackRuntime {
+    private nextRequestId = 1
+
+    private constructor(private readonly node: AudioWorkletNode) {}
+
+    static async create(context: AudioContext, channels: number, maxFrames: number): Promise<KahuRackRuntime> {
+        await loadWorkletModule(context)
+        const {wasmBytes} = await loadAssets()
+        const node = new AudioWorkletNode(context, "kahu-dsp", {
+            numberOfInputs: 1,
+            numberOfOutputs: 1,
+            outputChannelCount: [channels]
+        })
+        const runtime = new KahuRackRuntime(node)
+        try {
+            await runtime.initialize(wasmBytes.slice(0), context.sampleRate, channels, maxFrames)
+        } catch (error) {
+            runtime.dispose()
+            throw error
+        }
+        return runtime
+    }
+
+    get output(): AudioWorkletNode {
+        return this.node
+    }
+
+    get input(): AudioWorkletNode {
+        return this.node
+    }
+
+    async addDevice(module: KahuModuleManifest): Promise<KahuRackDeviceRuntime> {
+        const response = await this.request({type: "add", moduleIndex: module.runtime.registry_index})
+        if (response.type !== "added" || response.nodeId === undefined) throw new Error(response.message ?? "Rust rack module creation failed.")
+        return new KahuRackDeviceRuntime(this, response.nodeId, module)
+    }
+
+    async removeDevice(nodeId: number): Promise<void> {
+        await this.request({type: "remove", nodeId})
+    }
+
+    async moveDevice(nodeId: number, direction: -1 | 1): Promise<void> {
+        await this.request({type: "move", nodeId, direction})
+    }
+
+    connectOutput(output: AudioNode): void {
+        this.node.disconnect()
+        this.node.connect(output)
+    }
+
+    dispose(): void {
+        this.node.port.postMessage({type: "destroy"})
+        this.node.disconnect()
+    }
+
+    private initialize(wasmBytes: ArrayBuffer, sampleRate: number, channels: number, maxFrames: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const onMessage = (event: MessageEvent<{type: string, message?: string}>): void => {
+                if (event.data.type === "ready") {
+                    this.node.port.removeEventListener("message", onMessage)
+                    resolve()
+                } else if (event.data.type === "error") {
+                    this.node.port.removeEventListener("message", onMessage)
+                    reject(new Error(event.data.message ?? "Rust rack initialization failed."))
+                }
+            }
+            this.node.port.addEventListener("message", onMessage)
+            this.node.port.start()
+            this.node.port.postMessage({type: "init", wasmBytes, mode: "rack", sampleRate, channels, maxFrames}, [wasmBytes])
+        })
+    }
+
+    private request(message: Record<string, unknown>): Promise<{type: string, nodeId?: number, message?: string}> {
+        const requestId = this.nextRequestId++
+        return new Promise((resolve, reject) => {
+            const onMessage = (event: MessageEvent<{type: string, requestId?: number, nodeId?: number, message?: string}>): void => {
+                if (event.data.requestId !== requestId) return
+                this.node.port.removeEventListener("message", onMessage)
+                if (event.data.type === "error") reject(new Error(event.data.message ?? "Rust rack control failed."))
+                else resolve(event.data)
+            }
+            this.node.port.addEventListener("message", onMessage)
+            this.node.port.postMessage({...message, requestId})
+        })
+    }
+}
+
+export class KahuRackDeviceRuntime {
+    private readonly parameterIds = new Map<string, number>()
+    private readonly parameterValues = new Map<number, number>()
+
+    constructor(
+        private readonly rack: KahuRackRuntime,
+        private readonly nodeId: number,
+        private readonly module: KahuModuleManifest,
+    ) {
+        for (const parameter of module.parameters) {
+            this.parameterIds.set(parameter.key, parameter.id)
+            this.parameterValues.set(parameter.id, parameter.default)
+        }
+    }
+
+    get output(): AudioWorkletNode { return this.rack.output }
+    get latency(): number { return this.module.runtime.latency_samples ?? 0 }
+    get moduleId(): string { return this.module.id }
+    get name(): string { return this.module.name }
+    get parameters(): ReadonlyArray<KahuParameterManifest> { return this.module.parameters }
+
+    parameterValue(key: string): number {
+        const id = this.parameterIds.get(key)
+        return id === undefined ? 0 : this.parameterValues.get(id) ?? 0
+    }
+
+    setParameter(key: string, value: number): void {
+        const id = this.parameterIds.get(key)
+        if (id === undefined) return
+        this.parameterValues.set(id, value)
+        this.rack.output.port.postMessage({type: "parameter", nodeId: this.nodeId, parameterId: id, value})
+    }
+
+    setBypassed(bypassed: boolean): void {
+        this.rack.output.port.postMessage({type: "bypass", nodeId: this.nodeId, bypassed})
+    }
+
+    reset(): void { this.rack.output.port.postMessage({type: "reset"}) }
+    move(direction: -1 | 1): Promise<void> { return this.rack.moveDevice(this.nodeId, direction) }
+    connectOutput(output: AudioNode): void { void output }
+    dispose(): void { void this.rack.removeDevice(this.nodeId) }
+}
+
+export type KahuDeviceRuntime = KahuGainRuntime | KahuRackDeviceRuntime
