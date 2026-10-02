@@ -18,13 +18,24 @@ on:
       - ".github/workflows/kahu-testbed.yml"
   workflow_dispatch:
 
+env:
+  KAHU_DSP_PARENT_REF: 31595bef4a767d4852b5f44a6aaf8cafa84989c7
+  KAHU_DSP_ROOT: ${{ github.workspace }}/kahustack-dsp-parent
+
 jobs:
   source-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout KahuStack-OpenDAW
         uses: actions/checkout@v4
+
+      - name: Checkout canonical KahuStack DSP
+        uses: actions/checkout@v4
+        with:
+          repository: parkermeredith/kahustack-dsp
+          ref: ${{ env.KAHU_DSP_PARENT_REF }}
+          path: kahustack-dsp-parent
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,8 +44,21 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install OpenDAW dependencies
         run: npm ci
+
+      - name: Install canonical KahuStack DSP dependencies
+        working-directory: kahustack-dsp-parent
+        run: npm ci
+
+      - name: Build canonical Kahu Rust-WASM runtime
+        working-directory: kahustack-dsp-parent
+        run: npm run build:wasm
 
       - name: Build OpenDAW package dependencies
         run: |
