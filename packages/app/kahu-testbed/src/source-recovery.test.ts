@@ -27,7 +27,7 @@ const source = (overrides: Partial<DecodedAudioFile> = {}): DecodedAudioFile => 
     ...overrides,
 })
 
-describe("KBW-16 source recovery identity", () => {
+describe("KBW-17 source recovery identity", () => {
     it("matches filename case, channel count and decoded duration without requiring the same context sample rate", () => {
         expect(matchesRecoverableSource(sessionTrack(), source())).toBe(true)
         expect(matchesRecoverableSource(sessionTrack(), source({durationSeconds: 12.54}))).toBe(true)
