@@ -4,6 +4,7 @@ import {describe, expect, it} from "vitest"
 
 const source = readFileSync(fileURLToPath(new URL("./workbench.tsx", import.meta.url)), "utf8")
 const styles = readFileSync(fileURLToPath(new URL("./workbench.sass", import.meta.url)), "utf8")
+const knob = readFileSync(fileURLToPath(new URL("./ui/kahu-parameter-knob.ts", import.meta.url)), "utf8")
 
 describe("KUX workbench structure", () => {
     it("uses one track row authority without spacer alignment", () => {
@@ -38,6 +39,14 @@ describe("KUX workbench structure", () => {
         expect(styles).toContain("flex: 0 0 17.5rem")
         expect(styles).toContain("&.collapsed")
         expect(styles).toContain("&.minimized")
+    })
+
+    it("keeps Kahu transition semantics behind the rotary adapter", () => {
+        expect(knob).toContain("parameter.automation !== \"reprepare\"")
+        expect(knob).toContain("requestAnimationFrame")
+        expect(knob).toContain("scheduleRealtimeValue")
+        expect(knob).toContain("commit(parameter.default)")
+        expect(knob).toContain("readout.focus()")
     })
 
     it("refreshes the selected rack when source loading changes track selection", () => {
