@@ -1,10 +1,10 @@
 import {describe, expect, it} from "vitest"
 import {RackStore} from "./rack-store"
 
-describe("KOD-5 rack store", () => {
+describe("KBW rack store", () => {
     it("retains device order and bypass state per track", () => {
         const store = new RackStore()
-        const first = store.addReferenceSlot("track-01")
+        const first = store.addModule("track-01", "missing.module", "Unavailable module")
         const second = store.addModule("track-01", "utility.gain", "Gain", {gain_db: 0})
         store.setBypassed("track-01", first.id, true)
         store.move("track-01", second.id, -1)
@@ -16,8 +16,8 @@ describe("KOD-5 rack store", () => {
 
     it("removes a track chain without affecting another track", () => {
         const store = new RackStore()
-        store.addReferenceSlot("track-01")
-        store.addReferenceSlot("track-02")
+        store.addModule("track-01", "missing.module", "Unavailable module")
+        store.addModule("track-02", "missing.module", "Unavailable module")
         store.removeTrack("track-01")
         expect(store.devicesFor("track-01")).toHaveLength(0)
         expect(store.devicesFor("track-02")).toHaveLength(1)

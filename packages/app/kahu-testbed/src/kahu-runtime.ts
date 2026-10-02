@@ -19,7 +19,7 @@ let workletModule: Promise<void> | undefined
 let assets: Promise<Readonly<{wasmBytes: ArrayBuffer, manifest: KahuLibraryManifest}>> | undefined
 
 const loadWorkletModule = (context: AudioContext): Promise<void> => {
-    workletModule ??= context.audioWorklet.addModule("/worklets/kahu-gain-worklet.js")
+    workletModule ??= context.audioWorklet.addModule("/worklets/kahu-worklet.js")
     return workletModule
 }
 
@@ -37,12 +37,18 @@ const loadAssets = (): Promise<Readonly<{wasmBytes: ArrayBuffer, manifest: KahuL
     return assets
 }
 
-export class KahuGainRuntime {
+export class ReferenceDeviceRuntime {
     private readonly node: AudioWorkletNode
     private readonly latencySamples: number
     private readonly module: KahuModuleManifest
     private readonly parameterIds = new Map<string, number>()
     private readonly parameterValues = new Map<number, number>()
+    private errorHandler: ((message: string) => void) | undefined
+    private readonly errorListener = (event: MessageEvent<{type?: string, requestId?: number, message?: string}>): void => {
+        if (event.data.type === "error" && event.data.requestId === undefined) {
+            this.errorHandler?.(event.data.message ?? "Rust-WASM processing failed.")
+        }
+    }
     private ready = false
 
     private constructor(node: AudioWorkletNode, module: KahuModuleManifest) {
@@ -63,8 +69,8 @@ export class KahuGainRuntime {
         context: AudioContext,
         channels: number,
         maxFrames: number,
-        moduleId = "utility.gain"
-    ): Promise<KahuGainRuntime> {
+        moduleId: string
+    ): Promise<ReferenceDeviceRuntime> {
         await loadWorkletModule(context)
         const {wasmBytes, manifest} = await loadAssets()
         const module = manifest.modules.find(candidate => candidate.id === moduleId)
@@ -76,7 +82,7 @@ export class KahuGainRuntime {
             numberOfOutputs: 1,
             outputChannelCount: [channels]
         })
-        const runtime = new KahuGainRuntime(node, module)
+        const runtime = new ReferenceDeviceRuntime(node, module)
         try {
             await runtime.initialize(wasmBytes.slice(0), module.runtime.registry_index, context.sampleRate, channels, maxFrames)
             for (const parameter of module.parameters) {
@@ -141,12 +147,20 @@ export class KahuGainRuntime {
         this.node.port.postMessage({type: "reset"})
     }
 
+    setErrorHandler(handler: (message: string) => void): void {
+        this.errorHandler = handler
+        this.node.port.addEventListener("message", this.errorListener)
+        this.node.port.start()
+    }
+
     connectOutput(output: AudioNode): void {
         this.node.disconnect()
         this.node.connect(output)
     }
 
     dispose(): void {
+        this.node.port.removeEventListener("message", this.errorListener)
+        this.errorHandler = undefined
         this.node.port.postMessage({type: "destroy"})
         this.node.disconnect()
     }
@@ -184,11 +198,14 @@ export class KahuGainRuntime {
     }
 }
 
-/** Reference architecture retained for diagnostics and comparison against the consolidated rack. */
-export {KahuGainRuntime as ReferenceDeviceRuntime}
-
 export class KahuRackRuntime {
     private nextRequestId = 1
+    private errorHandler: ((message: string) => void) | undefined
+    private readonly errorListener = (event: MessageEvent<{type?: string, requestId?: number, message?: string}>): void => {
+        if (event.data.type === "error" && event.data.requestId === undefined) {
+            this.errorHandler?.(event.data.message ?? "Rust rack processing failed.")
+        }
+    }
 
     private constructor(private readonly node: AudioWorkletNode) {}
 
@@ -237,7 +254,23 @@ export class KahuRackRuntime {
         this.node.connect(output)
     }
 
+    reset(): void {
+        this.node.port.postMessage({type: "reset"})
+    }
+
+    resetNode(nodeId: number): void {
+        this.node.port.postMessage({type: "reset", nodeId})
+    }
+
+    setErrorHandler(handler: (message: string) => void): void {
+        this.errorHandler = handler
+        this.node.port.addEventListener("message", this.errorListener)
+        this.node.port.start()
+    }
+
     dispose(): void {
+        this.node.port.removeEventListener("message", this.errorListener)
+        this.errorHandler = undefined
         this.node.port.postMessage({type: "destroy"})
         this.node.disconnect()
     }
@@ -311,10 +344,11 @@ export class KahuRackDeviceRuntime {
         this.rack.output.port.postMessage({type: "bypass", nodeId: this.nodeId, bypassed})
     }
 
-    reset(): void { this.rack.output.port.postMessage({type: "reset"}) }
+    reset(): void { this.rack.resetNode(this.nodeId) }
+    setErrorHandler(handler: (message: string) => void): void { this.rack.setErrorHandler(handler) }
     move(direction: -1 | 1): Promise<void> { return this.rack.moveDevice(this.nodeId, direction) }
     connectOutput(output: AudioNode): void { void output }
     dispose(): void { void this.rack.removeDevice(this.nodeId) }
 }
 
-export type KahuDeviceRuntime = KahuGainRuntime | KahuRackDeviceRuntime
+export type KahuDeviceRuntime = ReferenceDeviceRuntime | KahuRackDeviceRuntime

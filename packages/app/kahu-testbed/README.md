@@ -4,7 +4,7 @@ This is a minimal, separate openDAW-family app for evaluating KahuStack DSP modu
 not a second Studio and does not redefine Kahu module IDs, parameter semantics, or realtime
 processing contracts.
 
-The active hardening program is **KBW — Kahu Browser Workbench v2**. KOD is prototype-foundation
+The active hardening program is **KBW — Kahu Browser Workbench v2**. Earlier prototype labels are
 history. KBW targets normal songs, stems, and reference tracks from seconds through tens of
 minutes; long-form streaming audio is explicitly deferred.
 

@@ -23,6 +23,7 @@ type WasmExports = {
     kahu_rack_set_bypassed: (handle: number, nodeId: number, bypassed: number) => number
     kahu_rack_set_parameter: (handle: number, nodeId: number, parameterId: number, value: number) => number
     kahu_rack_reset: (handle: number) => number
+    kahu_rack_reset_node: (handle: number, nodeId: number) => number
     kahu_rack_process: (handle: number, frames: number) => number
 }
 
@@ -45,7 +46,7 @@ type WorkletMessage = InitMessage | {
     readonly type: "bypass"
     readonly nodeId?: number
     readonly bypassed: boolean
-} | {readonly type: "reset"} | {
+} | {readonly type: "reset", readonly nodeId?: number} | {
     readonly type: "add"
     readonly requestId: number
     readonly moduleIndex: number
@@ -140,8 +141,12 @@ class KahuDspProcessor extends AudioWorkletProcessor {
             return
         }
         if (message.type === "reset" && this.wasm !== undefined && this.handle !== 0) {
-            if (this.mode === "rack") this.wasm.kahu_rack_reset(this.handle)
-            else this.wasm.kahu_reset(this.handle)
+            const status = this.mode === "rack"
+                ? message.nodeId === undefined
+                    ? this.wasm.kahu_rack_reset(this.handle)
+                    : this.wasm.kahu_rack_reset_node(this.handle, message.nodeId)
+                : this.wasm.kahu_reset(this.handle)
+            if (status !== 0) this.port.postMessage({type: "error", message: `Rust reset failed: ${status}`})
             return
         }
         if (message.type === "destroy") this.dispose()

@@ -22,22 +22,6 @@ export class RackStore {
         return this.chains.get(trackId) ?? []
     }
 
-    addReferenceSlot(trackId: string): RackDevice {
-        const device: RackDevice = {
-            id: `rack-${this.nextId.toString().padStart(2, "0")}`,
-            trackId,
-            name: "Reference effect slot",
-            moduleId: undefined,
-            parameterValues: {},
-            bypassed: false
-        }
-        this.nextId += 1
-        const chain = this.chains.get(trackId) ?? []
-        chain.push(device)
-        this.chains.set(trackId, chain)
-        return device
-    }
-
     addModule(trackId: string, moduleId: string, name: string, parameterValues: Record<string, number> = {}): RackDevice {
         const device: RackDevice = {
             id: `rack-${this.nextId.toString().padStart(2, "0")}`,

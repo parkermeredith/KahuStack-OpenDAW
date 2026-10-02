@@ -1,4 +1,4 @@
-// KBW-2 entrypoint: composes the isolated shell and metadata-driven browser host without owning DSP behavior.
+// Kahu Browser Workbench entrypoint: composes the browser host without owning DSP behavior.
 
 import "./main.sass"
 // The classic TypeScript JSX transform consumes createElement in generated output.
@@ -13,7 +13,7 @@ import {TrackState, TrackStore} from "./track-store"
 import {planRegionPlayback} from "./region"
 import {TimelineViewport} from "./timeline"
 import {RackStore} from "./rack-store"
-import {KahuDeviceRuntime, KahuGainRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime} from "./kahu-runtime"
+import {KahuDeviceRuntime, KahuModuleManifest, KahuParameterManifest, KahuRackRuntime, ReferenceDeviceRuntime} from "./kahu-runtime"
 import {
     controlStep,
     controlValueToParameterValue,
@@ -672,9 +672,14 @@ const initializeRuntime = async (trackId: string, deviceId: string, moduleId: st
                 kahuRuntimes.get(deviceId)?.dispose()
                 return rack.addDevice(module)
             })()
-            : await KahuGainRuntime.create(audioContext, 2, 128, moduleId)
+            : await ReferenceDeviceRuntime.create(audioContext, 2, 128, moduleId)
         kahuRuntimes.get(deviceId)?.dispose()
         kahuRuntimes.set(deviceId, runtime)
+        runtime.setErrorHandler(message => {
+            runtimeErrors.set(deviceId, message)
+            engineStatus?.replaceChildren("RUST/WASM ENGINE · ERROR")
+            refreshRack()
+        })
         rebuildTrackRack(trackId)
         const device = rackStore.devicesFor(trackId).find(candidate => candidate.id === deviceId)
         for (const parameter of runtime.parameters) {
@@ -760,11 +765,9 @@ const loadAudio = async (file: File): Promise<void> => {
         player.load(track.buffer)
         audioPlayers.set(state.id, player)
         rebuildTrackRack(state.id)
-        const device = rackStore.addModule(state.id, "utility.gain", "Gain", {gain_db: 0})
         refreshTrackList()
         updateSelectedTrack()
         refreshTrackDuration()
-        void initializeRuntime(state.id, device.id, device.moduleId ?? "utility.gain")
         if (wasPlaying) {
             const epoch = transport.reschedule()
             if (epoch !== undefined) playAllPlayers(epoch)
@@ -789,9 +792,12 @@ const toggleTransport = async (): Promise<void> => {
 
 const loadCatalog = async (): Promise<void> => {
     try {
-        catalogModules = (await KahuGainRuntime.catalog()).modules
+        catalogModules = (await ReferenceDeviceRuntime.catalog()).modules
         if (modulePicker !== undefined) {
-            modulePicker.replaceChildren()
+            const placeholder = document.createElement("option")
+            placeholder.value = ""
+            placeholder.textContent = "Choose module"
+            modulePicker.replaceChildren(placeholder)
             for (const module of catalogModules) {
                 const option = document.createElement("option")
                 option.value = module.id
@@ -983,7 +989,7 @@ replaceChildren(document.body, (
                 </div>
                 <span className="rack-note">Audio effects only · reference lifecycle</span>
                 <select className="module-picker" aria-label="Choose Kahu module" onInit={element => modulePicker = element}>
-                    <option value="utility.gain">Gain</option>
+                    <option value="">Choose module</option>
                 </select>
                 <button className="rack-bypass-button" type="button" onInit={element => {
                     bypassAllButton = element
@@ -993,7 +999,7 @@ replaceChildren(document.body, (
                     addRackSlotButton = element
                     element.onclick = () => {
                         const track = trackStore.selected()
-                        const moduleId = modulePicker?.value ?? "utility.gain"
+                        const moduleId = modulePicker?.value ?? ""
                         const module = catalogModules.find(candidate => candidate.id === moduleId)
                         if (track !== undefined && module !== undefined) {
                             const defaults = Object.fromEntries(module.parameters.map(parameter => [parameter.key, parameter.default]))

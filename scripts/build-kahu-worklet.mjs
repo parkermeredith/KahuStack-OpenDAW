@@ -9,7 +9,7 @@ import ts from "typescript"
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const childRoot = resolve(scriptDirectory, "..")
 const sourcePath = resolve(childRoot, "packages/app/kahu-testbed/src/kahu-worklet.ts")
-const outputPath = resolve(childRoot, "packages/app/kahu-testbed/public/worklets/kahu-gain-worklet.js")
+const outputPath = resolve(childRoot, "packages/app/kahu-testbed/public/worklets/kahu-worklet.js")
 const source = await readFile(sourcePath, "utf8")
 const transpiled = ts.transpileModule(source, {
     compilerOptions: {

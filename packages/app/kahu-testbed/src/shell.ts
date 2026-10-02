@@ -1,7 +1,7 @@
-// KOD-1 shell metadata keeps the initial testbed UI labels independent from rendering and DSP runtime code.
+// KBW shell metadata keeps the browser workbench identity independent from rendering and DSP runtime code.
 
 export const TestbedShell = {
     title: "KahuStack DSP Testbed",
-    phase: "KOD-1 / UI SHELL",
+    phase: "KBW v2 / BROWSER WORKBENCH",
     engineStatus: "RUST/WASM ENGINE · STANDBY"
 } as const

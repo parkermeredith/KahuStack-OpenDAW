@@ -1,4 +1,4 @@
-// KOD-11 gate: checks the staged Rust-WASM/catalog/worklet lineage used by the Kahu testbed.
+// KBW runtime gate: checks the staged Rust-WASM/catalog/worklet lineage used by the Kahu testbed.
 
 import {readFile} from "node:fs/promises"
 import {existsSync} from "node:fs"
@@ -10,7 +10,7 @@ const packageRoot = resolve(childRoot, "packages/app/kahu-testbed")
 const runtimeRoot = resolve(packageRoot, "public/kahu-runtime")
 const wasmPath = resolve(runtimeRoot, "kahu_dsp_wasm.wasm")
 const manifestPath = resolve(runtimeRoot, "library-manifest.json")
-const workletPath = resolve(packageRoot, "public/worklets/kahu-gain-worklet.js")
+const workletPath = resolve(packageRoot, "public/worklets/kahu-worklet.js")
 
 for (const path of [wasmPath, manifestPath, workletPath]) {
     if (!existsSync(path)) {
