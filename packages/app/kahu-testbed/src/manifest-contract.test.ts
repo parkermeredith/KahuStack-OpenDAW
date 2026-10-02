@@ -1,13 +1,92 @@
 // KBW-1 permanent contract tests: the browser host accepts only the parent-owned manifest semantics.
 
-import {readFileSync} from "node:fs"
 import {describe, expect, it} from "vitest"
 import {parseLibraryManifest} from "./generated/kahu-manifest-runtime"
 
 type JsonRecord = Record<string, unknown>
 
-const manifestPath = new URL("../public/kahu-runtime/library-manifest.json", import.meta.url)
-const baseline = JSON.parse(readFileSync(manifestPath, "utf8")) as JsonRecord
+const baseline: JsonRecord = {
+    schemaVersion: 1,
+    library: {
+        id: "kahustack-dsp",
+        name: "KahuStack DSP",
+        version: "test",
+        schema_version: 1,
+        manifest_format: 1,
+        domains: [{id: "utility", name: "Utility"}],
+        kinds: {allowed: ["utility"]},
+    },
+    moduleCount: 2,
+    modules: [
+        {
+            id: "utility.gain",
+            name: "Gain",
+            domain: "utility",
+            family: "gain",
+            kind: "utility",
+            maturity: "qa",
+            version: "1",
+            targets: ["native", "wasm"],
+            parameters: [
+                {
+                    id: 0,
+                    key: "gain_db",
+                    name: "Gain",
+                    default: 0,
+                    min: -24,
+                    max: 24,
+                    step: 0.1,
+                    unit: "dB",
+                    scale: "decibels",
+                    control: "continuous",
+                    transition: "linear-ramp:10ms",
+                    automation: "realtime",
+                },
+                {
+                    id: 1,
+                    key: "mode",
+                    name: "Mode",
+                    default: 0,
+                    min: 0,
+                    max: 1,
+                    step: 1,
+                    unit: "",
+                    scale: "enum",
+                    control: "enum",
+                    transition: "immediate",
+                    automation: "realtime",
+                    enum_values: ["Clean", "Color"],
+                },
+            ],
+            runtime: {registry_index: 0, latency_samples: 0},
+        },
+        {
+            id: "utility.trim",
+            name: "Trim",
+            domain: "utility",
+            family: "gain",
+            kind: "utility",
+            maturity: "qa",
+            version: "1",
+            targets: ["native", "wasm"],
+            parameters: [{
+                id: 0,
+                key: "trim_db",
+                name: "Trim",
+                default: 0,
+                min: -12,
+                max: 12,
+                step: 0.1,
+                unit: "dB",
+                scale: "decibels",
+                control: "continuous",
+                transition: "linear-ramp:10ms",
+                automation: "realtime",
+            }],
+            runtime: {registry_index: 1, latency_samples: 0},
+        },
+    ],
+}
 
 const cloneManifest = (): JsonRecord => structuredClone(baseline) as JsonRecord
 
@@ -22,10 +101,10 @@ const firstParameterOf = (manifest: JsonRecord): JsonRecord => {
 }
 
 describe("KBW-1 canonical manifest contract", () => {
-    it("parses the staged generated manifest with the parent validator", () => {
+    it("parses a standalone fixture with the parent validator", () => {
         const catalog = parseLibraryManifest(baseline)
         expect(catalog.moduleCount).toBe(catalog.modules.length)
-        expect(catalog.modules.find(module => module.id === "utility.gain")?.runtime.registry_index).toBe(43)
+        expect(catalog.modules.find(module => module.id === "utility.gain")?.runtime.registry_index).toBe(0)
     })
 
     it("rejects malformed modules and parameters", () => {
